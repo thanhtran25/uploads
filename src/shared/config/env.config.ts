@@ -10,7 +10,7 @@ export class Config {
   }
 
   static get DB_HOST(): string {
-    return process.env.DB_HOST as string;
+    return (process.env.DB_HOST || 'localhost') as string;
   }
 
   static get DB_PORT(): number {
@@ -18,15 +18,15 @@ export class Config {
   }
 
   static get DB_USER(): string {
-    return process.env.DB_USER as string;
+    return (process.env.DB_USER || 'root') as string;
   }
 
   static get DB_NAME(): string {
-    return process.env.DB_NAME as string;
+    return (process.env.DB_NAME || 'postgres') as string;
   }
 
   static get DB_PASSWORD(): string {
-    return process.env.DB_PASSWORD as string;
+    return (process.env.DB_PASSWORD || 'root') as string;
   }
 
   static get LOGGING(): string {

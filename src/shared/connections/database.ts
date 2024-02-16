@@ -13,8 +13,11 @@ export const AppDataSource = new DataSource({
   username: Config.DB_USER,
   password: Config.DB_PASSWORD,
   database: Config.DB_NAME,
-  entities: [path.join(__dirname, '../**/*.entity{.js,.ts}')],
-  migrations: [path.join(__dirname, '../migrations/*{.js,.ts}')],
+  entities: [
+    path.join(__dirname, '../..', 'modules/**/entities/*.entity{.js,.ts}'),
+  ],
+  migrations: [path.join(__dirname, '..', 'database/migrations/*{.js,.ts}')],
   namingStrategy: new SnakeNamingStrategy(),
   logging: Config.LOGGING === 'true' ? true : false,
 });
+console.log(path.join(__dirname, '..', 'database/migrations/*{.js,.ts}'));
