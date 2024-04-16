@@ -20,4 +20,3 @@ export const AppDataSource = new DataSource({
   namingStrategy: new SnakeNamingStrategy(),
   logging: Config.LOGGING === 'true' ? true : false,
 });
-console.log(path.join(__dirname, '..', 'database/migrations/*{.js,.ts}'));
