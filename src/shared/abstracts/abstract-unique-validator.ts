@@ -3,7 +3,7 @@ import {
   ValidatorConstraintInterface,
 } from 'class-validator';
 import { EntitySchema, FindOptionsWhere, ObjectType } from 'typeorm';
-import { AppDataSource } from '@shared/connections/database';
+// import { AppDataSource } from '@shared/connections/database';
 
 interface UniqueValidationArguments<E> extends ValidationArguments {
   constraints: [
@@ -26,11 +26,12 @@ export abstract class UniqueValidator implements ValidatorConstraintInterface {
         [findCondition || args.property]: value,
       };
     }
-    return (
-      (await AppDataSource.getRepository(EntityClass).count({
-        where: condition,
-      })) <= 0
-    );
+    // return (
+    //   (await AppDataSource.getRepository(EntityClass).count({
+    //     where: condition,
+    //   })) <= 0
+    // );
+    return true;
   }
 
   public defaultMessage(args: ValidationArguments) {

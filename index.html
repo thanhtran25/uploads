@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <title>Biểu đồ loại lệnh chứng khoán (theo chiều dọc thời gian)</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
+  <style>
+    body {
+      background: #f5f7fa;
+      font-family: "Segoe UI", sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+    }
+    h2 {
+      color: #333;
+      margin-bottom: 10px;
+    }
+    #chart-container {
+      width: 700px;
+      height: 750px;
+      background: white;
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.1);
+    }
+  </style>
+</head>
+<body>
+  <h2>📊 Loại lệnh chứng khoán – biểu đồ dọc (từ trên xuống theo thời gian)</h2>
+  <div id="chart-container">
+    <canvas id="verticalTimeChart"></canvas>
+  </div>
+
+  <script>
+    const markets = {
+      HOSE: [
+        { label: "ATO + LO", start: 9.00, end: 9.25, color: "#4CAF50" },
+        { label: "LO + MP", start: 9.25, end: 11.5, color: "#2196F3" },
+        { label: "Nghỉ trưa", start: 11.5, end: 13.0, color: "#E0E0E0" },
+        { label: "LO + MP", start: 13.0, end: 14.5, color: "#2196F3" },
+        { label: "ATC + LO", start: 14.5, end: 14.75, color: "#9C27B0" },
+        { label: "Thỏa thuận", start: 14.75, end: 15.0, color: "#FF9800" },
+      ],
+      HNX: [
+        { label: "ATO + LO", start: 9.00, end: 9.15, color: "#4CAF50" },
+        { label: "LO + MP", start: 9.15, end: 11.5, color: "#2196F3" },
+        { label: "Nghỉ trưa", start: 11.5, end: 13.0, color: "#E0E0E0" },
+        { label: "LO + MP", start: 13.0, end: 14.3, color: "#2196F3" },
+        { label: "ATC + LO", start: 14.3, end: 14.45, color: "#9C27B0" },
+        { label: "PLO", start: 14.45, end: 15.0, color: "#FF5722" },
+      ],
+      UPCoM: [
+        { label: "LO", start: 9.00, end: 11.5, color: "#2196F3" },
+        { label: "Nghỉ trưa", start: 11.5, end: 13.0, color: "#E0E0E0" },
+        { label: "LO", start: 13.0, end: 15.0, color: "#2196F3" },
+      ],
+      "Phái sinh": [
+        { label: "LO + MTL + MOK + MAK", start: 8.45, end: 11.3, color: "#2196F3" },
+        { label: "Nghỉ trưa", start: 11.3, end: 13.0, color: "#E0E0E0" },
+        { label: "LO + MTL + MOK + MAK", start: 13.0, end: 14.45, color: "#2196F3" },
+        { label: "Thỏa thuận", start: 14.45, end: 15.0, color: "#FF9800" },
+      ]
+    };
+
+    const marketNames = Object.keys(markets);
+
+    // gom dữ liệu thành datasets theo loại lệnh
+    const allLabels = new Set();
+    marketNames.forEach(m => markets[m].forEach(s => allLabels.add(s.label)));
+
+    const labelColors = {};
+    allLabels.forEach(label => {
+      const color = Object.values(markets)
+        .flat()
+        .find(s => s.label === label)?.color;
+      labelColors[label] = color;
+    });
+
+    const datasets = Array.from(allLabels).map(label => ({
+      label,
+      data: marketNames.map(m => {
+        const session = markets[m].find(s => s.label === label);
+        if (!session) return 0;
+        return session.end - session.start;
+      }),
+      backgroundColor: labelColors[label],
+      borderColor: "#fff",
+      borderWidth: 1,
+    }));
+
+    const ctx = document.getElementById("verticalTimeChart").getContext("2d");
+
+    new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: marketNames,
+        datasets,
+      },
+      options: {
+        indexAxis: "x", // Cột dựng thẳng (theo chiều dọc)
+        responsive: true,
+        maintainAspectRatio: false,
+        layout: { padding: 10 },
+        plugins: {
+          legend: {
+            position: "bottom",
+            labels: {
+              usePointStyle: true,
+              padding: 12,
+              font: { size: 12 }
+            }
+          },
+          tooltip: {
+            callbacks: {
+              label: (context) => {
+                const market = marketNames[context.dataIndex];
+                const session = markets[market].find(s => s.label === context.dataset.label);
+                return `${context.dataset.label}: ${session.start.toFixed(2)}h - ${session.end.toFixed(2)}h`;
+              }
+            }
+          },
+          datalabels: {
+            color: (ctx) => {
+              const bg = ctx.dataset.backgroundColor;
+              return bg === "#E0E0E0" ? "#333" : "white";
+            },
+            font: { size: 10, weight: "bold" },
+            align: "center",
+            anchor: "center",
+            formatter: (value, ctx) => {
+              if (value === 0) return "";
+              const market = marketNames[ctx.dataIndex];
+              const session = markets[market].find(s => s.label === ctx.dataset.label);
+              return `${session.label}\n(${session.start.toFixed(2)}–${session.end.toFixed(2)})`;
+            },
+          },
+        },
+        scales: {
+          x: {
+            stacked: true,
+            grid: { display: false },
+            ticks: { color: "#333", font: { weight: "bold" } },
+          },
+          y: {
+            stacked: true,
+            reverse: false, // đổi hướng để 8h ở trên cùng, 15h ở dưới
+            min: 0,
+            max: 6.5,
+            title: {
+              display: true,
+              text: "Thời gian trong ngày (8:30 → 15:00)",
+              color: "#333"
+            },
+            ticks: {
+              stepSize: 0.5,
+              callback: (v) => `${(v + 8.5).toFixed(2)}h`,
+              color: "#444"
+            },
+            grid: { color: "#ddd" }
+          }
+        }
+      },
+      plugins: [ChartDataLabels],
+    });
+  </script>
+</body>
+</html>

@@ -10,8 +10,6 @@ import {
   Relation,
   OneToMany,
 } from 'typeorm';
-import { Category } from '@modules/categories/entities/category.entity';
-import { Inventory } from '@modules/inventories/entities/inventory.entity';
 
 @Entity('products')
 export class Product {
@@ -52,15 +50,4 @@ export class Product {
 
   @DeleteDateColumn({ default: null })
   deletedAt: Date;
-
-  @ManyToOne(() => Category, (category) => category.products, {
-    nullable: false,
-  })
-  @JoinColumn({ name: 'category_id' })
-  category: Relation<Category>;
-  @Column()
-  categoryId: number;
-
-  @OneToMany(() => Inventory, (inventory) => inventory.product)
-  inventories: Relation<Inventory>[];
 }
