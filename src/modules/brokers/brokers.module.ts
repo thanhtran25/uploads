@@ -7,7 +7,8 @@ import { VPSService } from './markets/vps.service';
 import { MiraeAssetService } from './markets/mirae-asset.service';
 
 @Module({
-  controllers: [BrokersController],
   providers: [BrokersService, KISService, SSIService, VPSService, MiraeAssetService],
+  exports: [BrokersService, KISService, SSIService, VPSService, MiraeAssetService],
+  
 })
 export class BrokersModule {}
