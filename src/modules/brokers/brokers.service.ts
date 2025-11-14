@@ -24,9 +24,11 @@ export class BrokersService {
     const SSI = this.compareData(ssiData, kisData, KEY_MAP.ssi, 1);
     const VPS = this.compareData(vpsData, kisData, KEY_MAP.vps, 1000);
 
+
     return {
       SSI, 
-      VPS  
+      VPS,
+      VN100Symbol: ssiData.ssiVN100Arr
     };
   }
 
@@ -35,7 +37,11 @@ export class BrokersService {
     const HNX = compareObjectsWithWeight(source.Hnx , kis.Hnx, weight, keyMap);
     const UPCOM = compareObjectsWithWeight(source.Upcom, kis.Upcom, weight, keyMap);
     const WS = compareObjectsWithWeight(source.CW, kis.CW, weight, keyMap);
+    const VN100 = compareObjectsWithWeight(source.VN100, kis.VN100, weight, keyMap);
 
-    return { HOSE, HNX, UPCOM, WS };
+    return { 
+      HOSE, HNX, UPCOM, WS,
+      VN100
+     };
   }
 }

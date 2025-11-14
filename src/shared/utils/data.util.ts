@@ -11,7 +11,7 @@ export async function fetchFromAPI(url: string) {
   }
 }
 
-export function csvToJson(filePath) {
+export function csvToJson(filePath): Record<any, any>[] {
   const content = fs.readFileSync(filePath, 'utf-8');
 
   // Split lines and remove empty ones
@@ -57,3 +57,4 @@ export function mapData(arrObj: Record<string, any>[], key: string) {
   });
   return resultMap;
 }
+

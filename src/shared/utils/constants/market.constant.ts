@@ -10,6 +10,9 @@ export const KEY_MAP = {
     re: 'Ref',
     ce: 'Ceil',
     fl: 'Floor',
+  },
+  vn100: {
+    s: 'Symbol',
   }
 };
 
