@@ -1,0 +1,14 @@
+{
+    "fullName": "TRẦN THỊ THU THANH",
+    "birthday": "1999-01-04",
+    "mobile": "0964054860",
+    "numberID": "066199007328",
+    "bankList": [
+        {
+            "bankName": "NH TMCP Ngoại thương Việt Nam",
+            "bankPlaceIssue": "203",
+            "bankID": "VCB",
+            "bankAcID": "THUTHANHTRAN"
+        }
+    ]
+}

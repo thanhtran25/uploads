@@ -10,7 +10,7 @@ export function compareObjectsWithWeight(
     const item1 = obj1[symbol];
     const item2 = obj2[symbol];
     if (!item2) {
-      failedSymbols.push({ symbol, reason: 'Missing symbol' });
+      failedSymbols.push({ symbol, reason: 'Missing symbol'});
       continue;
     }
 

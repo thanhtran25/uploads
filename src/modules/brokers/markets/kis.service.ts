@@ -6,7 +6,7 @@ export class KISService {
   async fetchData() {
     const [kis, vn100ListSymbol] = await Promise.all([ 
       fetchFromAPI('https://trading.kisvn.vn/files/resources/symbol_static_data.json'),
-      fetchFromAPI('https://trading.kisvn.vn/rest/api/v2/market/indexStockList/VN100')
+      fetchFromAPI('https://trading.kisvn.vn/rest/api/v2/market/indexStockList/VN30')
     ]);
     const kisData = this.handleKISData(kis);
 
@@ -17,6 +17,7 @@ export class KISService {
   }
 
   handleKISData(kis: any) {
+    
     const Hose = mapData(
       kis.filter((obj) => obj.t === 'STOCK' && obj.m === 'HOSE'),
       's',
@@ -29,9 +30,9 @@ export class KISService {
       kis.filter((obj) => obj.t === 'STOCK' && obj.m === 'UPCOM'),
       's',
     );
-    const CW = mapData(kis.filter((obj) => obj.t === 'CW'), 's');
+    const CW = mapData(kis.filter((obj) => obj.t === 'FUTURES'), 's');
 
-    return { Hose, CW, Hnx, Upcom };
+    return { Hose, CW, Hnx, Upcom , kis};
   }
 
   handleVN100KisData(kis: any, vn100: string[]) {

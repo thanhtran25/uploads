@@ -17,18 +17,19 @@ export class BrokersService {
     const kisData = await this.kisService.fetchData();
 
     // ⚡ Tùy chọn nhà cung cấp nào cần so sánh
-    const vpsData = await this.vpsService.fetchData();
+    // const vpsData = await this.vpsService.fetchData();
     
     const ssiData = this.ssiService.handleSSIData();
 
     const SSI = this.compareData(ssiData, kisData, KEY_MAP.ssi, 1);
-    const VPS = this.compareData(vpsData, kisData, KEY_MAP.vps, 1000);
+    // const VPS = this.compareData(vpsData, kisData, KEY_MAP.vps, 1000);
 
 
     return {
       SSI, 
-      VPS,
+      // VPS,
       VN100Symbol: ssiData.ssiVN100Arr
+      // xx: kisData.kis
     };
   }
 
@@ -44,4 +45,6 @@ export class BrokersService {
       VN100
      };
   }
+
+  // 
 }
