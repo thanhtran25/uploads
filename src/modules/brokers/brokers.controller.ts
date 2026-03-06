@@ -1,20 +1,41 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  UseInterceptors,
+  UploadedFiles,
+} from '@nestjs/common';
+import { FilesInterceptor } from '@nestjs/platform-express/multer';
 import { BrokersService } from './brokers.service';
-import { postfromAPI } from '@shared/utils/data.util';
 
-@Controller('compare')
+type UploadedFile = { buffer: Buffer; originalname: string };
+
+@Controller('brokers')
 export class BrokersController {
   constructor(private readonly brokersService: BrokersService) {}
 
-  @Get()
-  findAll() {
-    return this.brokersService.findAll();
+  /**
+   * So sánh dữ liệu SSI (từ list file CSV upload) với dữ liệu KIS.
+   * POST /brokers/compare  (multipart/form-data, field name: "files")
+   */
+  @Post('compare')
+  @UseInterceptors(FilesInterceptor('files', 20))
+  compare(@UploadedFiles() files: UploadedFile[]) {
+    if (!files?.length) {
+      return { message: 'No files uploaded', data: {} };
+    }
+    return this.brokersService.compare(files);
   }
-    
-  @Post("/test")
-  test(@Body() body: any) {
-    console.log(body);
-    
-    return postfromAPI('http://localhost:9001/phone/confirmOtp', body.otp);
+
+  /**
+   * Nhận list file CSV (multipart/form-data, field name: "files").
+   * Trả về object: key = tên file (không extension), value = data đã mapData.
+   */
+  @Post('ssi/csv')
+  @UseInterceptors(FilesInterceptor('files', 20))
+  uploadSsiCsv(@UploadedFiles() files: UploadedFile[]) {
+    if (!files?.length) {
+      return { message: 'No files uploaded', data: {} };
+    }
+    return this.brokersService.handleSSIDataFromFiles(files);
   }
 }

@@ -1,33 +1,88 @@
 export function compareObjectsWithWeight(
-  obj1: Record<string, any>,
-  obj2: Record<string, any>,
+  sourceData: Record<string, any>,
+  kisData: Record<string, any>,
   weight: number,
-  keyMap: Record<string, string>,
+  columnMap: Record<string, string>,
 ) {
-  const failedSymbols = [];
+  type FailureType = 'missing_in_source' | 'missing_in_kis' | 'value_mismatch';
 
-  for (const symbol in obj1) {
-    const item1 = obj1[symbol];
-    const item2 = obj2[symbol];
-    if (!item2) {
-      failedSymbols.push({ symbol, reason: 'Missing symbol'});
+  const failures: {
+    symbol: string;
+    type: FailureType;
+    differences?: {
+      sourceField: string;
+      kisField: string;
+      expected: number;
+      actual: number;
+    }[];
+  }[] = [];
+
+  // Tập hợp tất cả symbol cần so sánh (hợp của 2 bên: source + KIS)
+  const allSymbols = new Set<string>([
+    ...Object.keys(sourceData ?? {}),
+    ...Object.keys(kisData ?? {}),
+  ]);
+
+  for (const symbol of allSymbols) {
+    const sourceItem = sourceData?.[symbol];
+    const kisItem = kisData?.[symbol];
+
+    // Symbol chỉ có ở KIS
+    if (!sourceItem && kisItem) {
+      failures.push({
+        symbol,
+        type: 'missing_in_source',
+      });
       continue;
     }
 
-    const failFields = [];
-    for (const [key2, key1] of Object.entries(keyMap)) {
-      if (key2 === 's') continue;
-      const v1 = Number(item1[key1]) * weight;
-      const v2 = Number(item2[key2]);
-      if (isNaN(v1) || isNaN(v2) || Math.abs(v1 - v2) > 1e-6) {
-        failFields.push({ field1: key1, field2: key2, expected: v1, actual: v2 });
+    // Symbol chỉ có ở source
+    if (sourceItem && !kisItem) {
+      failures.push({
+        symbol,
+        type: 'missing_in_kis',
+      });
+      continue;
+    }
+
+    const fieldDifferences: {
+      sourceField: string;
+      kisField: string;
+      expected: number;
+      actual: number;
+    }[] = [];
+
+    for (const [kisField, sourceField] of Object.entries(columnMap)) {
+      if (kisField === 's') continue;
+
+      const expected = Number(sourceItem[sourceField]) * weight;
+      const actual = Number(kisItem[kisField]);
+
+      if (isNaN(expected) || isNaN(actual) || Math.abs(expected - actual) > 1e-6) {
+        fieldDifferences.push({
+          sourceField,
+          kisField,
+          expected,
+          actual,
+        });
       }
     }
 
-    if (failFields.length > 0) failedSymbols.push({ symbol, failFields });
+    if (fieldDifferences.length > 0) {
+      failures.push({
+        symbol,
+        type: 'value_mismatch',
+        differences: fieldDifferences,
+      });
+    }
   }
 
-  return failedSymbols.length === 0
-    ? { status: 'pass' }
-    : { status: 'fail', failedSymbols };
+  if (failures.length === 0) {
+    return { status: 'pass' as const };
+  }
+
+  return {
+    status: 'fail' as const,
+    failures,
+  };
 }
