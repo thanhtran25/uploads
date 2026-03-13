@@ -5,15 +5,21 @@ export const KEY_MAP = {
     ce: 'c',
     fl: 'f',
   },
-  ssi: {
+  SSI: {
     s: 'Symbol',
     re: 'Ref',
     ce: 'Ceil',
     fl: 'Floor',
   },
+  iKIS_SSI: {
+    symbol: 'Symbol',
+    reference: 'Ref',
+    limitUp: 'Ceil',
+    limitDown: 'Floor',
+  },
   vn100: {
     s: 'Symbol',
-  }
+  },
 };
 
 export const MARKET_IDS = {

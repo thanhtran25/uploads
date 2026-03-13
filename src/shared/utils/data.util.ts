@@ -1,45 +1,26 @@
 import fs from 'fs';
 import axios from 'axios';
-function toPlainHeaders(headers: unknown): Record<string, string> {
-  if (!headers || typeof headers !== 'object') return {};
-
-  const source =
-    'toJSON' in headers && typeof headers.toJSON === 'function'
-      ? headers.toJSON()
-      : headers;
-
-  const result: Record<string, string> = {};
-  for (const [key, value] of Object.entries(
-    source as Record<string, unknown>,
-  )) {
-    if (value === undefined) continue;
-    result[key] = String(value);
-  }
-  return result;
-}
-
-function buildRequestSnapshot(config: any, fallbackUrl: string) {
-  return {
-    method: (config?.method ?? 'GET').toUpperCase(),
-    url: config?.url ?? fallbackUrl,
-    headers: toPlainHeaders(config?.headers),
-    params: config?.params ?? null,
-    data: config?.data ?? null,
-  };
-}
 
 export async function fetchFromAPI(url: string) {
   try {
-    const response = await axios.get(url);
-    const requestSnapshot = buildRequestSnapshot(response.config, url);
-    console.log(
-      '✅ API Request:',
-      JSON.stringify({
-        ...requestSnapshot,
-        status: response.status,
-        responseHeaders: toPlainHeaders(response.headers),
-      }, null, 2),
-    );
+    const response = await axios.get(url, {
+      headers: {
+        'client-code':
+          'LpPuP67Z%dJWwZ2j*HgGWfF!5$2fJorqa4d5d9D&legacy-messages',
+      },
+    });
+    return response.data;
+  } catch (error) {
+    console.error('❌ API Error:', error.message);
+    throw error;
+  }
+}
+
+export async function fetchAPI(url: string, params) {
+  try {
+    const response = await axios.get(url, {
+      ...params,
+    });
     return response.data;
   } catch (error) {
     console.error('❌ API Error:', error.message);

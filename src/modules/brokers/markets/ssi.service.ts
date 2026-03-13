@@ -20,7 +20,7 @@ export class SSIService {
     for (const file of files) {
       const fileName = path.basename(file.originalname, path.extname(file.originalname));
       const csvData = csvToJsonFromContent(file.buffer);
-      result[fileName] = mapData(csvData, KEY_MAP.ssi.s);
+      result[fileName] = mapData(csvData, KEY_MAP.SSI.s);
     }
 
     return result;

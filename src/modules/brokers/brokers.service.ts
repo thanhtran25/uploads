@@ -18,9 +18,7 @@ export class BrokersService {
   /**
    * Xử lý list file CSV upload từ API, trả về object key = tên file, value = data đã mapData.
    */
-  handleSSIDataFromFiles(
-    files: CsvFileLike[],
-  ) {
+  handleSSIDataFromFiles(files: CsvFileLike[]) {
     return this.ssiService.handleSSIData(files);
   }
 
@@ -28,18 +26,27 @@ export class BrokersService {
    * So sánh dữ liệu file (theo bảng MARKET truyền vào) với KIS.
    * Key và logic hoàn toàn dựa vào fileToMarket; thêm bên khác chỉ cần truyền MARKET mới.
    */
-  async compare(
-    files: CsvFileLike[],
-  ) {
-    const kisData = await this.kisService.fetchData();
+  async compare(files: CsvFileLike[]) {
+    const { wts: kisData, iKis } = await this.kisService.fetchData();
     const ssiData = this.ssiService.handleSSIData(files);
-    
-    return { 
-      SSI: this.handleCompareData(kisData, ssiData, KEY_MAP.ssi, 1, SSI_FILE_TO_MARKET) ,
+    return {
+      WTS: this.handleCompareData(
+        kisData,
+        ssiData,
+        KEY_MAP.SSI,
+        1,
+        SSI_FILE_TO_MARKET,
+        's',
+      ),
+      iKIS: this.handleCompareData(
+        iKis,
+        ssiData,
+        KEY_MAP.iKIS_SSI,
+        1,
+        SSI_FILE_TO_MARKET,
+        'symbol',
+      ),
     };
-    // return {
-    //   kisData
-    // }
   }
 
   handleCompareData(
@@ -48,13 +55,21 @@ export class BrokersService {
     keyMap: Record<string, string>,
     weight: number,
     fileToMarket: FileToMarketMapping,
+    kisSymbol: string,
   ) {
     const source: Record<string, Record<string, any>> = {};
     for (const [fileName, { sourceKey }] of Object.entries(fileToMarket)) {
       source[sourceKey] = sourceData[fileName] ?? {};
     }
 
-    return this.compareData(source, kisData, keyMap, weight, fileToMarket);
+    return this.compareData(
+      source,
+      kisData,
+      keyMap,
+      weight,
+      fileToMarket,
+      kisSymbol,
+    );
   }
 
   compareData(
@@ -63,15 +78,20 @@ export class BrokersService {
     keyMap: Record<string, string>,
     weight: number,
     fileToMarket: FileToMarketMapping,
+    kisSymbol: string,
   ) {
     const result: Record<string, any> = {};
-    for (const { sourceKey, resultKey, kisKey } of Object.values(fileToMarket)) {
+    for (const { sourceKey, resultKey, kisKey } of Object.values(
+      fileToMarket,
+    )) {
       const kisDataKey = kisKey ?? sourceKey;
       result[resultKey] = compareObjectsWithWeight(
+        sourceKey,
         source[sourceKey] ?? {},
         kis[kisDataKey] ?? {},
         weight,
         keyMap,
+        kisSymbol,
       );
     }
     return result;
