@@ -1,10 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import axios from 'axios';
-import { chromium, Download, Page } from 'playwright';
+import { chromium, Download, Locator, Page } from 'playwright';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Config } from '@shared/config/env.config';
-import { mapData } from '@shared/utils/data.util';
 
 type EkycListFilterParams = {
   card_id?: string;
@@ -18,20 +17,15 @@ type EkycListFilterParams = {
 @Injectable()
 export class ExcelDownloaderService {
   private readonly logger = new Logger(ExcelDownloaderService.name);
-  private readonly downloadDir = path.resolve(__dirname, '../../downloads');
+  private readonly downloadDir =
+    process.env.PRICEBOARD_DOWNLOAD_DIR?.trim() ||
+    path.join(process.cwd(), 'test');
   private readonly ekycCacheDir = path.join(this.downloadDir, 'ekyc-cache');
 
   constructor() {
     // Tạo thư mục lưu file nếu chưa có
-    if (!fs.existsSync(this.downloadDir)) {
-      fs.mkdirSync(this.downloadDir, { recursive: true });
-      this.logger.log(`Created download directory: ${this.downloadDir}`);
-    }
-
-    if (!fs.existsSync(this.ekycCacheDir)) {
-      fs.mkdirSync(this.ekycCacheDir, { recursive: true });
-      this.logger.log(`Created eKYC cache directory: ${this.ekycCacheDir}`);
-    }
+    this.ensureDirExists(this.downloadDir);
+    this.ensureDirExists(this.ekycCacheDir);
   }
 
   /**
@@ -46,27 +40,34 @@ export class ExcelDownloaderService {
 
     try {
       this.logger.log('Navigating to page...');
-      const response = await page.goto(
-        'https://iboard-query.ssi.com.vn/stock/exchange/hnx?boardId=MAIN',
-      );
+      const response = await page.goto('https://iboard.ssi.com.vn');
       this.logger.log(`Status: ${response?.status()}`);
       this.logger.log(`URL: ${response?.url()}`);
-      const bodyText = await response?.text();
-      this.logger.log(`Body: ${bodyText?.slice(0, 500)}`); // log 500 ký tự đầu
-      // console.log("response", response);
+      await page.waitForLoadState('domcontentloaded');
+      await page.waitForTimeout(1500);
+
+      await this.acceptTermsIfPresent(page);
 
       // Nếu cần login: thêm logic ở đây
       // await this.login(page);
 
-      this.logger.log('Waiting for download button...');
-      // 👉 TODO: Thay selector thực tế của nút tải Excel
-      const downloadButtonSelector = '#downloadExcelButton';
+      this.logger.log('Waiting for download button #btnExportPriceboard ...');
+      const downloadLocator = await this.findExportButton(
+        page,
+        '#btnExportPriceboard',
+      );
 
-      await page.waitForSelector(downloadButtonSelector, { timeout: 10000 });
-      const downloadPromise = page.waitForEvent('download');
+      if (!downloadLocator) {
+        throw new Error('Không tìm thấy nút tải Excel #btnExportPriceboard');
+      }
+
+      const downloadPromise = page.waitForEvent('download', {
+        timeout: 30000,
+      });
 
       this.logger.log('Clicking download button...');
-      await page.click(downloadButtonSelector);
+      await downloadLocator.scrollIntoViewIfNeeded();
+      await downloadLocator.click({ timeout: 5000 });
 
       const download: Download = await downloadPromise;
       const suggestedName = download.suggestedFilename();
@@ -81,6 +82,54 @@ export class ExcelDownloaderService {
       throw error;
     } finally {
       await browser.close();
+    }
+  }
+
+  private ensureDirExists(dir: string): void {
+    if (fs.existsSync(dir)) return;
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+      this.logger.log(`Created directory: ${dir}`);
+    } catch (error) {
+      this.logger.error(`Cannot create directory: ${dir}`, error);
+      throw error;
+    }
+  }
+
+  private async findExportButton(
+    page: Page,
+    selector: string,
+    timeoutMs = 15000,
+  ): Promise<Locator | null> {
+    const start = Date.now();
+
+    while (Date.now() - start < timeoutMs) {
+      const frames = [page.mainFrame(), ...page.frames()];
+      for (const frame of frames) {
+        const locator = frame.locator(selector);
+        if ((await locator.count()) > 0) {
+          return locator.first();
+        }
+      }
+
+      await page.waitForTimeout(500);
+    }
+
+    return null;
+  }
+
+  private async acceptTermsIfPresent(page: Page): Promise<void> {
+    this.logger.log('Xác nhận điều khoản ngay khi vào trang (nếu có)...');
+    try {
+      const modal = page.locator('.confirm-modal-tnc[role=\"dialog\"]');
+      await modal.first().waitFor({ state: 'visible', timeout: 3000 });
+
+      const confirmButton = modal.getByRole('button', { name: /xác nhận/i });
+      await confirmButton.first().click({ timeout: 5000 });
+      this.logger.log('Đã bấm nút Xác nhận trên popup.');
+      await page.waitForTimeout(5000);
+    } catch (error) {
+      this.logger.warn('Không thể bấm popup điều khoản, tiếp tục tải.', error);
     }
   }
 
