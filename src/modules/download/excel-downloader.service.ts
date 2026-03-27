@@ -86,7 +86,7 @@ export class ExcelDownloaderService {
     });
     const context = await browser.newContext({
       acceptDownloads: true,
-      viewport: { width: 1280, height: 900 },
+      viewport: { width: 1920, height: 1080 },
       userAgent:
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     });
@@ -224,10 +224,12 @@ export class ExcelDownloaderService {
     this.logger.log(`Chuyển tab priceboard order ${order}...`);
 
     const item = page.locator(
-      `li.price-board-menu-overflow-item[style*="order: ${order}"]`,
+      `li.price-board-menu-overflow-item[style*="order: ${order}"], ` +
+      `li.price-board-menu-overflow-item[style*="order:${order}"]`,
     );
 
     await item.first().waitFor({ state: 'visible', timeout: T.appear });
+    await item.first().scrollIntoViewIfNeeded();
     await item.first().click({ timeout: T.action, force: true });
     await page.locator(
       `li.price-board-menu-submenu-selected[style*="order: ${order}"], li.price-board-menu-item-selected[style*="order: ${order}"]`,
