@@ -3,6 +3,14 @@ import { chromium, Download, Locator, Page } from 'playwright';
 import * as fs from 'fs';
 import * as path from 'path';
 
+const T = {
+  navigation: 60_000,
+  networkIdle: 20_000,
+  appear: 15_000,
+  action: 10_000,
+  download: 60_000,
+} as const;
+
 type DownloadStep = {
   order: number | null;
   menuId?: string;
@@ -88,22 +96,24 @@ export class ExcelDownloaderService {
       this.logger.log(`Downloading SSI data → ${dir}`);
       const response = await page.goto('https://iboard.ssi.com.vn', {
         waitUntil: 'domcontentloaded',
-        timeout: 60_000,
+        timeout: T.navigation,
       });
       this.logger.log(`Status: ${response?.status()}`);
+      await page.waitForLoadState('networkidle', { timeout: T.networkIdle }).catch(() => {
+        this.logger.warn('networkidle timeout, continuing anyway...');
+      });
 
       await this.acceptTermsIfPresent(page);
       await this.switchToEnglish(page);
 
       const steps: DownloadStep[] = [
-        { order: null },
-        { order: 1, menuId: 'priceboardMenu-vn30', subItems: ['VN100'] },
         { order: 2 },
         { order: 3 },
-        { order: 4, menuId: 'priceboardMenu-hnx', subItems: ['HNX', 'HNX Bond'] },
         { order: 5 },
         { order: 9, menuId: 'priceboardMenu-derivatives', subItems: ['Derivatives'] },
         { order: 9, menuId: 'priceboardMenu-rc-menu-more', subItems: ['Covered Warrants'] },
+        { order: 1, menuId: 'priceboardMenu-vn30', subItems: ['VN30', 'VN100'] },
+        { order: 4, menuId: 'priceboardMenu-hnx', subItems: ['HNX', 'HNX Bond'] },
       ];
 
       for (const step of steps) {
@@ -162,15 +172,15 @@ export class ExcelDownloaderService {
       const dropdownButton = page.locator(
         '#languageSwitcher .dropdown-button',
       );
-      await dropdownButton.first().waitFor({ state: 'visible', timeout: 5000 });
-      await dropdownButton.first().click({ timeout: 3000 });
+      await dropdownButton.first().waitFor({ state: 'visible', timeout: T.appear });
+      await dropdownButton.first().click({ timeout: T.action });
 
       const englishItem = page.locator(
         '#languageSwitcher .dropdown-menu li span:text("English")',
       );
-      await englishItem.first().waitFor({ state: 'visible', timeout: 3000 });
-      await englishItem.first().click({ timeout: 3000 });
-      await page.locator('#languageSwitcher .dropdown-menu').waitFor({ state: 'hidden', timeout: 3000 }).catch(() => {});
+      await englishItem.first().waitFor({ state: 'visible', timeout: T.action });
+      await englishItem.first().click({ timeout: T.action });
+      await page.locator('#languageSwitcher .dropdown-menu').waitFor({ state: 'hidden', timeout: T.action }).catch(() => {});
       this.logger.log('Đã chuyển ngôn ngữ sang English.');
     } catch (error) {
       this.logger.log(
@@ -183,12 +193,12 @@ export class ExcelDownloaderService {
     this.logger.log('Xác nhận điều khoản ngay khi vào trang (nếu có)...');
     try {
       const modal = page.locator('.confirm-modal-tnc[role="dialog"]');
-      await modal.first().waitFor({ state: 'visible', timeout: 1000 });
+      await modal.first().waitFor({ state: 'visible', timeout: T.action });
 
       const confirmButton = modal.getByRole('button', { name: /xác nhận/i });
-      await confirmButton.first().click({ timeout: 1000 });
+      await confirmButton.first().click({ timeout: T.action });
       this.logger.log('Đã bấm nút Xác nhận trên popup.');
-      await modal.first().waitFor({ state: 'hidden', timeout: 3000 });
+      await modal.first().waitFor({ state: 'hidden', timeout: T.action });
     } catch (error) {
       this.logger.warn('Không thể bấm popup điều khoản, tiếp tục tải.', error);
     }
@@ -217,11 +227,11 @@ export class ExcelDownloaderService {
       `li.price-board-menu-overflow-item[style*="order: ${order}"]`,
     );
 
-    await item.first().waitFor({ state: 'visible', timeout: 5000 });
-    await item.first().click({ timeout: 3000 });
+    await item.first().waitFor({ state: 'visible', timeout: T.appear });
+    await item.first().click({ timeout: T.action });
     await page.locator(
       `li.price-board-menu-submenu-selected[style*="order: ${order}"], li.price-board-menu-item-selected[style*="order: ${order}"]`,
-    ).first().waitFor({ state: 'attached', timeout: 3000 }).catch(() => {});
+    ).first().waitFor({ state: 'attached', timeout: T.action }).catch(() => {});
   }
 
   private async switchBoardSubItem(
@@ -232,7 +242,7 @@ export class ExcelDownloaderService {
     this.logger.log(`Chuyển submenu "${menuId}" → "${subItemText}"...`);
 
     const tabTitle = page.locator(`div[data-menu-id="${menuId}"]`);
-    await tabTitle.first().waitFor({ state: 'attached', timeout: 5000 });
+    await tabTitle.first().waitFor({ state: 'attached', timeout: T.appear });
 
     await page.evaluate((id) => {
       const div = document.querySelector(`div[data-menu-id="${id}"]`);
@@ -245,13 +255,13 @@ export class ExcelDownloaderService {
     }, menuId);
 
     const popup = page.locator(`#${menuId}-popup`);
-    await popup.waitFor({ state: 'visible', timeout: 5000 });
+    await popup.waitFor({ state: 'visible', timeout: T.appear });
 
     const subItem = popup.locator(`li:has-text("${subItemText}")`);
-    await subItem.first().waitFor({ state: 'visible', timeout: 3000 });
+    await subItem.first().waitFor({ state: 'visible', timeout: T.action });
 
-    await subItem.first().click({ timeout: 3000 });
-    await popup.waitFor({ state: 'hidden', timeout: 3000 }).catch(() => {});
+    await subItem.first().click({ timeout: T.action });
+    await popup.waitFor({ state: 'hidden', timeout: T.action }).catch(() => {});
   }
 
   private async triggerDownload(
@@ -269,6 +279,7 @@ export class ExcelDownloaderService {
     const downloadLocator = await this.findExportButton(
       page,
       '#btnExportPriceboard',
+      15_000,
     );
 
     if (!downloadLocator) {
@@ -276,12 +287,12 @@ export class ExcelDownloaderService {
     }
 
     const downloadPromise = page.waitForEvent('download', {
-      timeout: 30_000,
+      timeout: T.download,
     });
 
     this.logger.log('Clicking download button...');
     await downloadLocator.scrollIntoViewIfNeeded();
-    await downloadLocator.click({ timeout: 5000 });
+    await downloadLocator.click({ timeout: T.action });
 
     const download: Download = await downloadPromise;
     const suggestedName = download.suggestedFilename();
