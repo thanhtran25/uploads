@@ -19,7 +19,7 @@ export class DownloadScheduleService {
     }
   }
 
-  @Cron('0 0 7 * * 1-5', { name: 'ssi-cleanup', timeZone: 'Asia/Ho_Chi_Minh' })
+  @Cron('0 39 15 * * 1-5', { name: 'ssi-cleanup', timeZone: 'Asia/Ho_Chi_Minh' })
   handleCleanup() {
     this.logger.log('Cron: Cleaning up old SSI downloads...');
     this.downloadService.cleanupOldDirs();

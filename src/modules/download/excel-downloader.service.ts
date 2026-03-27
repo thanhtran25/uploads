@@ -86,9 +86,11 @@ export class ExcelDownloaderService {
 
     try {
       this.logger.log(`Downloading SSI data → ${dir}`);
-      const response = await page.goto('https://iboard.ssi.com.vn');
+      const response = await page.goto('https://iboard.ssi.com.vn', {
+        waitUntil: 'domcontentloaded',
+        timeout: 60_000,
+      });
       this.logger.log(`Status: ${response?.status()}`);
-      await page.waitForLoadState('domcontentloaded');
 
       await this.acceptTermsIfPresent(page);
       await this.switchToEnglish(page);
