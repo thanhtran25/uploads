@@ -1,10 +1,4 @@
 export const KEY_MAP = {
-  vps: {
-    s: 'sym',
-    re: 'r',
-    ce: 'c',
-    fl: 'f',
-  },
   SSI: {
     s: 'Symbol',
     re: 'Ref',
@@ -17,39 +11,52 @@ export const KEY_MAP = {
     limitUp: 'Ceil',
     limitDown: 'Floor',
   },
-  vn100: {
-    s: 'Symbol',
+  MAS: {
+    s: 's',
+    re: 're',
+    ce: 'ce',
+    fl: 'fl',
+  },
+  iKIS_MAS: {
+    symbol: 's',
+    reference: 're',
+    limitUp: 'ce',
+    limitDown: 'fl',
   },
 };
 
-export const MARKET_IDS = {
-  HOSE: 'HOSE',
-  HNX: 'HNX',
-  UPCOM: 'UPCOM',
-};
-
-export interface MarketMappingEntry {
+export interface MarketCompareEntry {
   sourceKey: string;
   resultKey: string;
   kisKey?: string;
 }
 
-/** Bảng MARKET: tên file → entry. Thêm bên khác chỉ cần thêm constant mới cùng kiểu này. */
-export type FileToMarketMapping = Record<string, MarketMappingEntry>;
+/**
+ * Shared market entries — defines which markets to compare.
+ * All data sources must normalize their data to use sourceKey as the key.
+ */
+export const MARKET_ENTRIES: MarketCompareEntry[] = [
+  { sourceKey: 'HOSE', resultKey: 'HOSE' },
+  { sourceKey: 'HNX', resultKey: 'HNX' },
+  { sourceKey: 'UPCOM', resultKey: 'UPCOM' },
+  { sourceKey: 'CW', resultKey: 'CW' },
+  { sourceKey: 'FUTURES', resultKey: 'DERIATIVES' },
+  { sourceKey: 'VN30', resultKey: 'VN30' },
+  { sourceKey: 'VN100', resultKey: 'VN100' },
+  { sourceKey: 'HNX30', resultKey: 'HNX30' },
+  { sourceKey: 'BOND', resultKey: 'BOND' },
+];
 
-/** MARKET SSI: mapping file CSV SSI. */
-export const SSI_FILE_TO_MARKET: FileToMarketMapping = {
-  EXCHANGE_HOSE: { sourceKey: 'HOSE', resultKey: 'HOSE' },
-  EXCHANGE_HNX: { sourceKey: 'HNX', resultKey: 'HNX' },
-  EXCHANGE_UPCOM: { sourceKey: 'UPCOM', resultKey: 'UPCOM' },
-  STOCKTYPE_COVERED_WARRANTS: { sourceKey: 'CW', resultKey: 'CW' },
-  VDERIATIVES_DERIVATIVES: {
-    sourceKey: 'DV',
-    resultKey: 'DV',
-    kisKey: 'FUTURES',
-  },
-  GROUP_VN30: { sourceKey: 'VN30', resultKey: 'VN30' },
-  GROUP_HNX30: { sourceKey: 'HNX30', resultKey: 'HNX30' },
-  STOCKTYPE_HNX_BOND: { sourceKey: 'BOND', resultKey: 'BOND' },
+/** SSI-specific: maps CSV file name → canonical sourceKey for normalization. */
+export const SSI_FILE_SOURCE_MAP: Record<string, string> = {
+  EXCHANGE_HOSE: 'HOSE',
+  EXCHANGE_HNX: 'HNX',
+  EXCHANGE_UPCOM: 'UPCOM',
+  STOCKTYPE_COVERED_WARRANTS: 'CW',
+  DERIVATIVES_DERIVATIVES: 'FUTURES',
+  GROUP_VN30: 'VN30',
+  GROUP_VN100: 'VN100',
+  GROUP_HNX30: 'HNX30',
+  STOCKTYPE_HNX_BOND: 'BOND',
 };
 

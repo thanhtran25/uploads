@@ -1,67 +1,472 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Chúc mừng</title>
-  <link rel="stylesheet" href="style.css" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Reconciliation Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #3b82f6;
+            --primary-dark: #1d4ed8;
+            --success: #10b981;
+            --success-bg: #ecfdf5;
+            --success-border: #a7f3d0;
+            --danger: #ef4444;
+            --danger-bg: #fef2f2;
+            --danger-border: #fecaca;
+            --warn: #f59e0b;
+            --warn-bg: #fffbeb;
+            --warn-border: #fde68a;
+            --bg: #f1f5f9;
+            --surface: #ffffff;
+            --border: #e2e8f0;
+            --text: #0f172a;
+            --text-secondary: #64748b;
+            --text-muted: #94a3b8;
+            --radius: 10px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        .container { max-width: 1280px; margin: 0 auto; padding: 32px 24px; }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            margin-bottom: 28px;
+        }
+
+        .header-left h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.3px; }
+        .header-left p { color: var(--text-secondary); font-size: 13px; margin-top: 4px; }
+
+        .header-right { display: flex; gap: 10px; align-items: center; }
+
+        .date-badge {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            padding: 7px 14px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .btn {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 8px 18px; border-radius: 8px; font-size: 13px;
+            font-weight: 600; border: none; cursor: pointer; transition: all .15s;
+        }
+        .btn-primary { background: var(--primary); color: #fff; }
+        .btn-primary:hover { background: var(--primary-dark); }
+        .btn-primary:disabled { opacity: .55; cursor: not-allowed; }
+
+        /* ── Summary ── */
+        .summary { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; margin-bottom: 28px; }
+        .summary-card {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: var(--radius); padding: 18px 20px;
+            display: flex; align-items: center; gap: 14px;
+        }
+        .summary-icon {
+            width: 42px; height: 42px; border-radius: 10px;
+            display: grid; place-items: center; font-size: 18px; flex-shrink: 0;
+        }
+        .summary-icon.total { background: #eff6ff; color: var(--primary); }
+        .summary-icon.pass  { background: var(--success-bg); color: var(--success); }
+        .summary-icon.fail  { background: var(--danger-bg); color: var(--danger); }
+        .summary-info .label {
+            font-size: 12px; font-weight: 500; color: var(--text-muted);
+            text-transform: uppercase; letter-spacing: .4px;
+        }
+        .summary-info .value { font-size: 26px; font-weight: 700; line-height: 1.2; }
+
+        /* ── Platform Section ── */
+        .platform-section { margin-bottom: 24px; }
+        .platform-section:last-child { margin-bottom: 0; }
+
+        .table-card {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: var(--radius); overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,.1);
+        }
+        .table-card-header {
+            padding: 14px 20px; border-bottom: 1px solid var(--border);
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .table-card-header h2 { font-size: 15px; font-weight: 700; }
+
+        .platform-tag {
+            display: inline-flex; align-items: center; gap: 5px;
+            padding: 4px 12px; border-radius: 6px; font-size: 11px;
+            font-weight: 700; text-transform: uppercase; letter-spacing: .3px;
+        }
+        .platform-tag.wts  { background: #eff6ff; color: var(--primary); border: 1px solid #bfdbfe; }
+        .platform-tag.ikis { background: #f5f3ff; color: #7c3aed; border: 1px solid #ddd6fe; }
+
+        /* ── Table ── */
+        .recon-table { width: 100%; border-collapse: collapse; }
+        .recon-table th, .recon-table td {
+            padding: 10px 16px; font-size: 13px; text-align: center;
+            border-bottom: 1px solid var(--border);
+        }
+        .recon-table thead th {
+            background: #f8fafc; font-weight: 600; color: var(--text-secondary);
+            font-size: 12px; text-transform: uppercase; letter-spacing: .3px;
+        }
+        .recon-table tbody tr { transition: background .1s; }
+        .recon-table tbody tr:hover { background: #f8fafc; }
+        .recon-table tbody tr:last-child td { border-bottom: none; }
+        .market-name { text-align: left !important; font-weight: 600; width: 130px; }
+
+        /* ── Badges ── */
+        .badge {
+            display: inline-flex; align-items: center; gap: 4px;
+            padding: 4px 10px; border-radius: 6px; font-size: 12px;
+            font-weight: 600; line-height: 1;
+        }
+        .badge-ok { background: var(--success-bg); color: #059669; border: 1px solid var(--success-border); }
+        .badge-fail {
+            background: var(--danger-bg); color: #dc2626; border: 1px solid var(--danger-border);
+            cursor: pointer; transition: all .15s;
+        }
+        .badge-fail:hover { background: #fee2e2; border-color: #fca5a5; }
+
+        /* ── Modal ── */
+        .modal-overlay {
+            display: none; position: fixed; inset: 0; z-index: 100;
+            background: rgba(15,23,42,.45); backdrop-filter: blur(4px);
+        }
+        .modal-overlay.active { display: flex; align-items: center; justify-content: center; animation: fadeIn .15s; }
+        @keyframes fadeIn { from { opacity: 0 } }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(12px) } }
+
+        .modal {
+            background: var(--surface); width: 90%; max-width: 580px;
+            border-radius: 14px; overflow: hidden; animation: slideUp .2s ease;
+            max-height: 85vh; display: flex; flex-direction: column;
+        }
+        .modal-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 18px 22px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+        }
+        .modal-header h3 { font-size: 17px; font-weight: 700; }
+        .modal-context { font-size: 12px; color: var(--text-muted); font-weight: 500; margin-top: 2px; }
+
+        .close-btn {
+            width: 32px; height: 32px; border-radius: 8px;
+            border: 1px solid var(--border); background: transparent;
+            display: grid; place-items: center; cursor: pointer;
+            font-size: 18px; color: var(--text-secondary); transition: all .1s;
+        }
+        .close-btn:hover { background: #f1f5f9; color: var(--text); }
+
+        .modal-scroll { overflow-y: auto; flex: 1; }
+
+        .modal-body { padding: 18px 22px; display: flex; flex-direction: column; gap: 12px; }
+
+        /* ── Error Panel ── */
+        .error-panel {
+            background: #f8fafc; border: 1px solid var(--border);
+            border-radius: 10px; overflow: hidden;
+        }
+        .error-panel-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 10px 14px; border-bottom: 1px solid var(--border);
+        }
+        .error-panel-title {
+            font-size: 12px; font-weight: 700; display: flex; align-items: center; gap: 6px;
+        }
+        .error-panel-title .count {
+            min-width: 20px; height: 18px; padding: 0 6px;
+            border-radius: 9px; font-size: 11px; font-weight: 700;
+            display: inline-flex; align-items: center; justify-content: center;
+        }
+
+        .panel-source .error-panel-title { color: var(--danger); }
+        .panel-source .count { background: var(--danger-bg); color: var(--danger); }
+
+        .panel-kis .error-panel-title { color: var(--warn); }
+        .panel-kis .count { background: var(--warn-bg); color: var(--warn); }
+
+        .panel-mismatch .error-panel-title { color: var(--primary); }
+        .panel-mismatch .count { background: #eff6ff; color: var(--primary); }
+
+        .btn-copy {
+            display: inline-flex; align-items: center; gap: 4px;
+            padding: 4px 10px; border-radius: 6px; font-size: 11px;
+            font-weight: 600; border: 1px solid var(--border); background: var(--surface);
+            cursor: pointer; color: var(--text-secondary); transition: all .15s;
+        }
+        .btn-copy:hover { background: #f1f5f9; color: var(--text); }
+        .btn-copy.copied { background: var(--success-bg); color: var(--success); border-color: var(--success-border); }
+
+        .symbol-list {
+            list-style: none; padding: 10px 14px;
+            display: flex; flex-direction: column; gap: 2px;
+        }
+        .symbol-list li {
+            font-size: 13px; font-weight: 600;
+            font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+            color: var(--text); padding: 4px 8px; border-radius: 4px;
+        }
+        .symbol-list li:hover { background: #e2e8f0; }
+        .symbol-list .empty {
+            font-family: inherit; font-weight: 500; color: var(--text-muted);
+        }
+        .symbol-list .empty:hover { background: transparent; }
+
+        /* mismatch table */
+        .mismatch-table { width: 100%; border-collapse: collapse; }
+        .mismatch-table th, .mismatch-table td {
+            padding: 6px 14px; font-size: 12px; text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+        .mismatch-table thead th {
+            background: #f1f5f9; font-weight: 600; color: var(--text-secondary);
+            font-size: 11px; text-transform: uppercase; letter-spacing: .3px;
+        }
+        .mismatch-table tbody tr:last-child td { border-bottom: none; }
+        .mismatch-table .mono {
+            font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+            font-weight: 600;
+        }
+
+        .modal-footer {
+            padding: 14px 22px; border-top: 1px solid var(--border);
+            text-align: right; flex-shrink: 0;
+        }
+        .btn-secondary {
+            padding: 8px 20px; border-radius: 8px; border: 1px solid var(--border);
+            background: var(--surface); font-size: 13px; font-weight: 600;
+            cursor: pointer; color: var(--text-secondary); transition: all .1s;
+        }
+        .btn-secondary:hover { background: #f1f5f9; color: var(--text); }
+
+        .spinner {
+            width: 16px; height: 16px;
+            border: 2px solid rgba(255,255,255,.3); border-top-color: #fff;
+            border-radius: 50%; animation: spin .5s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg) } }
+
+        .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+        .empty-state .icon { font-size: 40px; margin-bottom: 12px; }
+        .empty-state p { font-size: 14px; }
+    </style>
 </head>
 <body>
-  <div class="screen">
-    <!-- Icon success -->
-    <div class="success-icon">
-      <div class="circle">
-        ✓
-      </div>
+
+<div class="container">
+    <header>
+        <div class="header-left">
+            <h1>Data Reconciliation</h1>
+            <p>KIS vs Third-party data comparison</p>
+        </div>
+        <div class="header-right">
+            <span class="date-badge" id="dateLabel">--</span>
+            <button class="btn btn-primary" id="btnRun" onclick="runCompare()">Reload</button>
+        </div>
+    </header>
+
+    <div class="summary" id="summary" style="display:none">
+        <div class="summary-card">
+            <div class="summary-icon total">&#9776;</div>
+            <div class="summary-info"><div class="label">Total checks</div><div class="value" id="statTotal">0</div></div>
+        </div>
+        <div class="summary-card">
+            <div class="summary-icon pass">&#10003;</div>
+            <div class="summary-info"><div class="label">Passed</div><div class="value" id="statPass" style="color:var(--success)">0</div></div>
+        </div>
+        <div class="summary-card">
+            <div class="summary-icon fail">&#10007;</div>
+            <div class="summary-info"><div class="label">Failed</div><div class="value" id="statFail" style="color:var(--danger)">0</div></div>
+        </div>
     </div>
 
-    <!-- Title -->
-    <h1>Chúc mừng!</h1>
-    <p class="subtitle">
-      Tài khoản của bạn đã được tạo thành công.
-      Bây giờ bạn có thể bắt đầu quản lý tài chính
-      của mình một cách an toàn.
-    </p>
-
-    <!-- Account card -->
-    <div class="card">
-      <div class="row">
-        <span class="label">CHỦ TÀI KHOẢN</span>
-        <strong>Jonathan Doe</strong>
-      </div>
-
-      <div class="row">
-        <span class="label">SỐ TÀI KHOẢN</span>
-        <div class="account-number">
-          <span>1234 5678 9012</span>
-          <button class="copy">📋</button>
+    <div id="resultsContainer">
+        <div class="table-card">
+            <div id="tableContainer">
+                <div class="empty-state">
+                    <div class="icon">&#128202;</div>
+                    <p>Click <strong>Run Compare</strong> to start reconciliation</p>
+                </div>
+            </div>
         </div>
-      </div>
-
-      <div class="grid">
-        <div>
-          <span class="label">TÊN ĐĂNG NHẬP</span>
-          <strong>@johndoe_fintech</strong>
-        </div>
-        <div>
-          <span class="label">LOẠI TÀI KHOẢN</span>
-          <strong>Tiết kiệm cao cấp</strong>
-        </div>
-      </div>
-
-      <div class="note">
-        🔒 Vì sự an toàn của bạn, không chia sẻ những thông tin này với bất kỳ ai.
-        Chúng tôi sẽ không bao giờ hỏi mật khẩu của bạn qua điện thoại hoặc email.
-      </div>
     </div>
+</div>
 
-    <!-- Buttons -->
-    <button class="btn primary">🚀 Mở ứng dụng iKIS</button>
-    <button class="btn dark">Đi đến Trang chủ →</button>
+<div class="modal-overlay" id="errorModal">
+    <div class="modal">
+        <div class="modal-header">
+            <div>
+                <h3 id="modalTitle"></h3>
+                <div class="modal-context" id="modalContext"></div>
+            </div>
+            <button class="close-btn" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-scroll">
+            <div class="modal-body" id="modalBody"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-secondary" onclick="closeModal()">Close</button>
+        </div>
+    </div>
+</div>
 
-    <button class="link">
-      📄 Tải xuống hợp đồng
-    </button>
-  </div>
+<script>
+    const API_BASE = 'http://localhost:1912';
+
+    function setDate() {
+        const d = new Date();
+        document.getElementById('dateLabel').textContent =
+            d.toLocaleDateString('vi-VN', { weekday:'short', day:'2-digit', month:'2-digit', year:'numeric' });
+    }
+    setDate();
+
+    async function runCompare() {
+        const btn = document.getElementById('btnRun');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Loading...';
+        try {
+            const res = await fetch(`${API_BASE}/brokers/compare`);
+            const json = await res.json();
+
+            if (!json.results) {
+                document.getElementById('resultsContainer').innerHTML =
+                    `<div class="table-card"><div class="empty-state"><div class="icon">&#128337;</div><p>${json.message || 'No data available.'}</p></div></div>`;
+                document.getElementById('summary').style.display = 'none';
+                return;
+            }
+
+            document.getElementById('dateLabel').textContent = json.date || '--';
+            renderResults(json.results);
+        } catch (err) {
+            document.getElementById('resultsContainer').innerHTML =
+                `<div class="table-card"><div class="empty-state"><div class="icon">&#9888;</div><p>Failed to load: ${err.message}</p></div></div>`;
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Reload';
+        }
+    }
+
+    function renderResults(data) {
+        const sources = Object.keys(data);
+        const platforms = ['WTS', 'iKIS'];
+        const allMarkets = new Set();
+
+        for (const src of sources)
+            for (const plat of platforms)
+                if (data[src]?.[plat])
+                    Object.keys(data[src][plat]).forEach(m => allMarkets.add(m));
+
+        const markets = [...allMarkets];
+        let total = 0, pass = 0, fail = 0;
+
+        let html = '';
+        for (const plat of platforms) {
+            const tagClass = plat === 'WTS' ? 'wts' : 'ikis';
+            html += '<div class="platform-section"><div class="table-card">';
+            html += `<div class="table-card-header"><h2><span class="platform-tag ${tagClass}">${plat}</span></h2></div>`;
+            html += '<table class="recon-table"><thead><tr><th class="market-name">Market</th>';
+            for (const src of sources) html += `<th>${src}</th>`;
+            html += '</tr></thead><tbody>';
+
+            for (const market of markets) {
+                html += `<tr><td class="market-name">${market}</td>`;
+                for (const src of sources) {
+                    const cell = data[src]?.[plat]?.[market];
+                    total++;
+                    if (!cell || cell.status === '\u2705') {
+                        pass++;
+                        html += '<td><span class="badge badge-ok">\u2713 OK</span></td>';
+                    } else {
+                        fail++;
+                        const f = cell.failures || {};
+                        const count = (f.missing_in_source||[]).length + (f.missing_in_kis||[]).length + (f.value_mismatch||[]).length;
+                        const payload = JSON.stringify({ market, src, plat, failures: f });
+                        html += `<td><span class="badge badge-fail" onclick='showError(${payload.replace(/'/g,"&#39;")})'>`;
+                        html += `\u2717 ${count} issue${count>1?'s':''}</span></td>`;
+                    }
+                }
+                html += '</tr>';
+            }
+            html += '</tbody></table></div></div>';
+        }
+
+        document.getElementById('resultsContainer').innerHTML = html;
+        document.getElementById('statTotal').textContent = total;
+        document.getElementById('statPass').textContent = pass;
+        document.getElementById('statFail').textContent = fail;
+        document.getElementById('summary').style.display = 'grid';
+    }
+
+    function showError({ market, src, plat, failures }) {
+        document.getElementById('modalTitle').textContent = market;
+        document.getElementById('modalContext').textContent = `Platform: ${plat}  \u00b7  Source: ${src}`;
+
+        const missingSource = [...(failures.missing_in_source || [])].sort();
+        const missingKis = [...(failures.missing_in_kis || [])].sort();
+        const mismatch = [...(failures.value_mismatch || [])].sort((a,b) => a.symbol.localeCompare(b.symbol));
+
+        let body = '';
+
+        if (missingSource.length) {
+            body += buildSymbolPanel('panel-source', 'Missing in Source', missingSource);
+        }
+        if (missingKis.length) {
+            body += buildSymbolPanel('panel-kis', 'Missing in KIS', missingKis);
+        }
+        if (mismatch.length) {
+            body += '<div class="error-panel panel-mismatch">';
+            body += `<div class="error-panel-header"><div class="error-panel-title">Value Mismatch <span class="count">${mismatch.length}</span></div>`;
+            body += `<button class="btn-copy" onclick="copyList(this, '${mismatch.map(m=>m.symbol).join('\\n')}')">Copy</button></div>`;
+            body += '<table class="mismatch-table"><thead><tr><th>Symbol</th><th>Field</th><th>Source</th><th>KIS</th></tr></thead><tbody>';
+            for (const m of mismatch) {
+                const d = m.differences || {};
+                body += `<tr><td class="mono">${m.symbol}</td><td>${d.kisField||'-'}</td><td>${d.expected??'-'}</td><td>${d.actual??'-'}</td></tr>`;
+            }
+            body += '</tbody></table></div>';
+        }
+
+        document.getElementById('modalBody').innerHTML = body;
+        document.getElementById('errorModal').classList.add('active');
+    }
+
+    function buildSymbolPanel(panelClass, title, items) {
+        let html = `<div class="error-panel ${panelClass}">`;
+        html += `<div class="error-panel-header"><div class="error-panel-title">${title} <span class="count">${items.length}</span></div>`;
+        html += `<button class="btn-copy" onclick="copyList(this, '${items.join('\\n')}')">Copy</button></div>`;
+        html += '<ul class="symbol-list">';
+        html += items.map(s => `<li>${s}</li>`).join('');
+        html += '</ul></div>';
+        return html;
+    }
+
+    function copyList(btn, text) {
+        navigator.clipboard.writeText(text).then(() => {
+            btn.classList.add('copied');
+            btn.textContent = 'Copied!';
+            setTimeout(() => { btn.classList.remove('copied'); btn.textContent = 'Copy'; }, 1500);
+        });
+    }
+
+    function closeModal() { document.getElementById('errorModal').classList.remove('active'); }
+
+    window.addEventListener('click', e => { if (e.target === document.getElementById('errorModal')) closeModal(); });
+    window.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+    runCompare();
+</script>
+
 </body>
 </html>

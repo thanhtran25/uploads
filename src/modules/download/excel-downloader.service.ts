@@ -1,89 +1,110 @@
 import { Injectable, Logger } from '@nestjs/common';
-import axios from 'axios';
 import { chromium, Download, Locator, Page } from 'playwright';
 import * as fs from 'fs';
 import * as path from 'path';
-import { Config } from '@shared/config/env.config';
 
-type EkycListFilterParams = {
-  card_id?: string;
-  full_name?: string;
-  page?: number;
-  max_size?: number;
-  start_date?: string;
-  end_date?: string;
+type DownloadStep = {
+  order: number | null;
+  menuId?: string;
+  subItems?: string[];
 };
 
 @Injectable()
 export class ExcelDownloaderService {
   private readonly logger = new Logger(ExcelDownloaderService.name);
-  private readonly downloadDir =
+  private readonly baseDir =
     process.env.PRICEBOARD_DOWNLOAD_DIR?.trim() ||
-    path.join(process.cwd(), 'test');
-  private readonly ekycCacheDir = path.join(this.downloadDir, 'ekyc-cache');
+    path.join(process.cwd(), 'downloads', 'ssi');
 
   constructor() {
-    // Tạo thư mục lưu file nếu chưa có
-    this.ensureDirExists(this.downloadDir);
-    this.ensureDirExists(this.ekycCacheDir);
+    this.ensureDirExists(this.baseDir);
+  }
+
+  private todayDir(): string {
+    const date = new Date().toISOString().slice(0, 10);
+    return path.join(this.baseDir, date);
+  }
+
+  getLatestDir(): string | null {
+    if (!fs.existsSync(this.baseDir)) return null;
+    const dirs = fs.readdirSync(this.baseDir)
+      .filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d) && fs.statSync(path.join(this.baseDir, d)).isDirectory())
+      .sort()
+      .reverse();
+    return dirs.length ? path.join(this.baseDir, dirs[0]) : null;
+  }
+
+  loadFilesFromDir(dir: string): { buffer: Buffer; originalname: string }[] {
+    if (!fs.existsSync(dir)) return [];
+    return fs.readdirSync(dir)
+      .filter((f) => f.endsWith('.csv'))
+      .map((f) => ({
+        buffer: fs.readFileSync(path.join(dir, f)),
+        originalname: f,
+      }));
+  }
+
+  cleanupOldDirs(): void {
+    if (!fs.existsSync(this.baseDir)) return;
+    const today = new Date().toISOString().slice(0, 10);
+    const dirs = fs.readdirSync(this.baseDir)
+      .filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d) && d < today);
+
+    for (const dir of dirs) {
+      const fullPath = path.join(this.baseDir, dir);
+      fs.rmSync(fullPath, { recursive: true, force: true });
+      this.logger.log(`Cleaned up old download dir: ${fullPath}`);
+    }
   }
 
   /**
    * Tự động vào trang web và tải file Excel
    */
   async downloadExcelFromSite(): Promise<string> {
+    const dir = this.todayDir();
+    this.ensureDirExists(dir);
+    this._currentDownloadDir = dir;
+
     const browser = await chromium.launch({ headless: false });
-    const context = await browser.newContext({
-      acceptDownloads: true,
-    });
+    const context = await browser.newContext({ acceptDownloads: true });
     const page = await context.newPage();
 
     try {
-      this.logger.log('Navigating to page...');
+      this.logger.log(`Downloading SSI data → ${dir}`);
       const response = await page.goto('https://iboard.ssi.com.vn');
       this.logger.log(`Status: ${response?.status()}`);
-      this.logger.log(`URL: ${response?.url()}`);
       await page.waitForLoadState('domcontentloaded');
-      await page.waitForTimeout(1500);
 
       await this.acceptTermsIfPresent(page);
+      await this.switchToEnglish(page);
 
-      // Nếu cần login: thêm logic ở đây
-      // await this.login(page);
+      const steps: DownloadStep[] = [
+        { order: null },
+        { order: 1, menuId: 'priceboardMenu-vn30', subItems: ['VN100'] },
+        { order: 2 },
+        { order: 3 },
+        { order: 4, menuId: 'priceboardMenu-hnx', subItems: ['HNX', 'HNX Bond'] },
+        { order: 5 },
+        { order: 9, menuId: 'priceboardMenu-derivatives', subItems: ['Derivatives'] },
+        { order: 9, menuId: 'priceboardMenu-rc-menu-more', subItems: ['Covered Warrants'] },
+      ];
 
-      this.logger.log('Waiting for download button #btnExportPriceboard ...');
-      const downloadLocator = await this.findExportButton(
-        page,
-        '#btnExportPriceboard',
-      );
-
-      if (!downloadLocator) {
-        throw new Error('Không tìm thấy nút tải Excel #btnExportPriceboard');
+      for (const step of steps) {
+        await this.downloadStep(page, step);
       }
 
-      const downloadPromise = page.waitForEvent('download', {
-        timeout: 30000,
-      });
-
-      this.logger.log('Clicking download button...');
-      await downloadLocator.scrollIntoViewIfNeeded();
-      await downloadLocator.click({ timeout: 5000 });
-
-      const download: Download = await downloadPromise;
-      const suggestedName = download.suggestedFilename();
-      const savePath = path.join(this.downloadDir, suggestedName);
-
-      await download.saveAs(savePath);
-      this.logger.log(`✅ File downloaded: ${savePath}`);
-
-      return savePath;
+      this.logger.log(`All SSI downloads complete → ${dir}`);
+      return dir;
     } catch (error) {
-      this.logger.error('❌ Download failed', error);
+      this.logger.error('Download failed', error);
       throw error;
     } finally {
+      this._currentDownloadDir = undefined;
       await browser.close();
     }
   }
+
+  private _currentDownloadDir?: string;
 
   private ensureDirExists(dir: string): void {
     if (fs.existsSync(dir)) return;
@@ -99,7 +120,7 @@ export class ExcelDownloaderService {
   private async findExportButton(
     page: Page,
     selector: string,
-    timeoutMs = 15000,
+    timeoutMs = 5000,
   ): Promise<Locator | null> {
     const start = Date.now();
 
@@ -112,203 +133,152 @@ export class ExcelDownloaderService {
         }
       }
 
-      await page.waitForTimeout(500);
+      await page.waitForTimeout(200);
     }
 
     return null;
   }
 
+  private async switchToEnglish(page: Page): Promise<void> {
+    this.logger.log('Chuyển ngôn ngữ sang English nếu có...');
+    try {
+      const dropdownButton = page.locator(
+        '#languageSwitcher .dropdown-button',
+      );
+      await dropdownButton.first().waitFor({ state: 'visible', timeout: 5000 });
+      await dropdownButton.first().click({ timeout: 3000 });
+
+      const englishItem = page.locator(
+        '#languageSwitcher .dropdown-menu li span:text("English")',
+      );
+      await englishItem.first().waitFor({ state: 'visible', timeout: 3000 });
+      await englishItem.first().click({ timeout: 3000 });
+      await page.locator('#languageSwitcher .dropdown-menu').waitFor({ state: 'hidden', timeout: 3000 }).catch(() => {});
+      this.logger.log('Đã chuyển ngôn ngữ sang English.');
+    } catch (error) {
+      this.logger.log(
+        'Không tìm thấy nút chuyển English, giữ nguyên ngôn ngữ.',
+      );
+    }
+  }
+
   private async acceptTermsIfPresent(page: Page): Promise<void> {
     this.logger.log('Xác nhận điều khoản ngay khi vào trang (nếu có)...');
     try {
-      const modal = page.locator('.confirm-modal-tnc[role=\"dialog\"]');
-      await modal.first().waitFor({ state: 'visible', timeout: 3000 });
+      const modal = page.locator('.confirm-modal-tnc[role="dialog"]');
+      await modal.first().waitFor({ state: 'visible', timeout: 1000 });
 
       const confirmButton = modal.getByRole('button', { name: /xác nhận/i });
-      await confirmButton.first().click({ timeout: 5000 });
+      await confirmButton.first().click({ timeout: 1000 });
       this.logger.log('Đã bấm nút Xác nhận trên popup.');
-      await page.waitForTimeout(5000);
+      await modal.first().waitFor({ state: 'hidden', timeout: 3000 });
     } catch (error) {
       this.logger.warn('Không thể bấm popup điều khoản, tiếp tục tải.', error);
     }
   }
 
-  async fetchEkycListFilter(
-    params: EkycListFilterParams = {},
-  ): Promise<unknown> {
-    const authorization = Config.IDG_EKYC_AUTHORIZATION;
-    const tokenId = Config.IDG_EKYC_TOKEN_ID;
-    const tokenKey = Config.IDG_EKYC_TOKEN_KEY;
-
-    const requestParams = {
-      card_id: params.card_id ?? '',
-      full_name: params.full_name ?? '',
-      page: params.page ?? 1,
-      max_size: params.max_size ?? 1000,
-      start_date: params.start_date ?? this.getTodayAsMMDDYYYY(),
-      end_date: params.end_date ?? this.getTodayAsMMDDYYYY(),
-    };
-
-    const authHeader = authorization.toLowerCase().startsWith('bearer ')
-      ? authorization
-      : `bearer ${authorization}`;
-
-    const cacheFilePath = this.getEkycCacheFilePath(
-      requestParams.start_date,
-      requestParams.end_date,
-    );
-
-    if (fs.existsSync(cacheFilePath)) {
-      this.logger.log(`Using cached eKYC file: ${cacheFilePath}`);
-      const cachedData = this.readCachedEkycData(cacheFilePath);
-      if (cachedData) {
-        return this.handleData(cachedData);
+  private async downloadStep(page: Page, step: DownloadStep): Promise<string> {
+    if (step.menuId && step.subItems?.length) {
+      let lastPath = '';
+      for (const subItem of step.subItems) {
+        await this.switchBoardSubItem(page, step.menuId, subItem);
+        lastPath = await this.triggerDownload(page, step.order);
       }
+      return lastPath;
     }
 
-    try {
-      const response = await axios.get(
-        'https://api.idg.vnpt.vn/log-service/ekyc/list-filter',
-        {
-          params: requestParams,
-          headers: {
-            Accept: 'application/json, text/plain, */*',
-            'Accept-Language': 'en-US,en;q=0.9,vi;q=0.8',
-            Authorization: authHeader,
-            Connection: 'keep-alive',
-            'Content-Type': 'application/json',
-            Origin: 'https://ekyc.vnpt.vn',
-            Referer: 'https://ekyc.vnpt.vn/',
-            'Sec-Fetch-Dest': 'empty',
-            'Sec-Fetch-Mode': 'cors',
-            'Sec-Fetch-Site': 'same-site',
-            'Token-id': tokenId,
-            'Token-key': tokenKey,
-            'User-Agent':
-              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36',
-            'sec-ch-ua':
-              '"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"',
-            'sec-ch-ua-mobile': '?0',
-            'sec-ch-ua-platform': '"Windows"',
-          },
-        },
-      );
-
-      const data = response.data.object.data;
-
-      fs.writeFileSync(cacheFilePath, JSON.stringify(data, null, 2), 'utf-8');
-      this.logger.log(`Saved eKYC cache file: ${cacheFilePath}`);
-
-      return this.handleData(data);
-    } catch (error) {
-      const status = axios.isAxiosError(error)
-        ? error.response?.status ?? 'N/A'
-        : 'N/A';
-      this.logger.error(
-        `Failed to fetch eKYC list filter. Status: ${status}`,
-        error instanceof Error ? error.stack : String(error),
-      );
-      throw error;
+    if (step.order !== null) {
+      await this.switchBoard(page, step.order);
     }
+    return this.triggerDownload(page, step.order);
   }
 
-  /**
-   * (Tùy chọn) Ví dụ login
-   */
-  private async login(page: Page): Promise<void> {
-    this.logger.log('Logging in...');
-    await page.fill('#username', 'your_username');
-    await page.fill('#password', 'your_password');
-    await page.click('#login-button');
-    await page.waitForNavigation({ timeout: 10000 });
+  private async switchBoard(page: Page, order: number): Promise<void> {
+    this.logger.log(`Chuyển tab priceboard order ${order}...`);
+
+    const item = page.locator(
+      `li.price-board-menu-overflow-item[style*="order: ${order}"]`,
+    );
+
+    await item.first().waitFor({ state: 'visible', timeout: 5000 });
+    await item.first().click({ timeout: 3000 });
+    await page.locator(
+      `li.price-board-menu-submenu-selected[style*="order: ${order}"], li.price-board-menu-item-selected[style*="order: ${order}"]`,
+    ).first().waitFor({ state: 'attached', timeout: 3000 }).catch(() => {});
   }
 
-  private getRequiredEnv(key: string): string {
-    const value = process.env[key];
-    if (!value) {
-      throw new Error(`Missing required environment variable: ${key}`);
-    }
-    return value;
-  }
+  private async switchBoardSubItem(
+    page: Page,
+    menuId: string,
+    subItemText: string,
+  ): Promise<void> {
+    this.logger.log(`Chuyển submenu "${menuId}" → "${subItemText}"...`);
 
-  private getTodayAsMMDDYYYY(): string {
-    const date = new Date();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate() - 1).padStart(2, '0');
-    const year = date.getFullYear();
-    return `${day}/${month}/${year}`;
-  }
+    const tabTitle = page.locator(`div[data-menu-id="${menuId}"]`);
+    await tabTitle.first().waitFor({ state: 'attached', timeout: 5000 });
 
-  private getEkycCacheFilePath(startDate: string, endDate: string): string {
-    const safeStartDate = this.toSafeFilePart(startDate);
-    const safeEndDate = this.toSafeFilePart(endDate);
-    const fileName = `ekyc-${safeStartDate}-${safeEndDate}.json`;
-    return path.join(this.ekycCacheDir, fileName);
-  }
-
-  private toSafeFilePart(value: string): string {
-    return value.trim().replace(/[^a-zA-Z0-9_-]+/g, '-');
-  }
-
-  private readCachedEkycData(filePath: string): any[] | null {
-    try {
-      const rawFile = fs.readFileSync(filePath, 'utf-8');
-      const parsedFile = JSON.parse(rawFile);
-      if (Array.isArray(parsedFile)) {
-        return parsedFile;
+    // The tab may be visually obscured by other menu items (e.g. Watchlist).
+    // Dispatch mouseover/mouseenter on both the <li> parent and <div> child
+    // to trigger rc-menu's hover handler via React's event delegation.
+    await page.evaluate((id) => {
+      const div = document.querySelector(`div[data-menu-id="${id}"]`);
+      const li = div?.closest('li.price-board-menu-submenu');
+      for (const el of [li, div]) {
+        if (!el) continue;
+        el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+        el.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false }));
       }
-      return null;
-    } catch (error) {
-      this.logger.warn(`Invalid cache file, fallback to API: ${filePath}`);
-      return null;
+    }, menuId);
+
+    const popup = page.locator(`#${menuId}-popup`);
+    await popup.waitFor({ state: 'visible', timeout: 5000 });
+
+    const subItem = popup.locator(`li:has-text("${subItemText}")`);
+    await subItem.first().waitFor({ state: 'visible', timeout: 3000 });
+
+    await subItem.first().click({ timeout: 3000 });
+    await popup.waitFor({ state: 'hidden', timeout: 3000 }).catch(() => {});
+  }
+
+  private async triggerDownload(
+    page: Page,
+    order: number | null,
+  ): Promise<string> {
+    this.logger.log(
+      `Waiting for download button #btnExportPriceboard (order ${
+        order ?? 'default'
+      })...`,
+    );
+
+    await page.waitForTimeout(1000);
+
+    const downloadLocator = await this.findExportButton(
+      page,
+      '#btnExportPriceboard',
+    );
+
+    if (!downloadLocator) {
+      throw new Error('Không tìm thấy nút tải Excel #btnExportPriceboard');
     }
-  }
 
-  private handleData(data: any[]): any {
-    const result = data.filter(
-      ({ client_session }) => client_session !== 'KIS_EKYC',
+    const downloadPromise = page.waitForEvent('download', {
+      timeout: 30_000,
+    });
+
+    this.logger.log('Clicking download button...');
+    await downloadLocator.scrollIntoViewIfNeeded();
+    await downloadLocator.click({ timeout: 5000 });
+
+    const download: Download = await downloadPromise;
+    const suggestedName = download.suggestedFilename();
+    const saveDir = this._currentDownloadDir || this.todayDir();
+    const savePath = path.join(saveDir, suggestedName);
+
+    await download.saveAs(savePath);
+    this.logger.log(
+      `✅ File downloaded${order ? ` (order ${order})` : ''}: ${savePath}`,
     );
 
-    const iosData = result.filter(({ client_session }) =>
-      client_session?.startsWith('IOS'),
-    );
-
-    const androidData = result.filter(({ client_session }) =>
-      client_session?.startsWith('ANDROID'),
-    );
-
-    return {
-      iosData: this.mapData(iosData),
-      androidData: this.mapData(androidData),
-    };
-  }
-
-  private mapData(data: any[]) {
-    const mappedData = data.map(
-      ({
-        client_session,
-        match_prob,
-        ocr_warning,
-        valid_liveness_card_back,
-        valid_liveness_card_front,
-        valid_liveness_face,
-        card_id,
-      }) => ({
-        client_session,
-        match_prob,
-        ocr_warning,
-        valid_liveness_card_back,
-        valid_liveness_card_front,
-        valid_liveness_face,
-        card_id,
-      }),
-    );
-
-    return mappedData.filter(
-      ({ ocr_warning, valid_liveness_face, match_prob }) =>
-        Number(ocr_warning) === 1 &&
-        Number(valid_liveness_face) === 1 &&
-        Number(match_prob) >= 95,
-    );
+    return savePath;
   }
 }

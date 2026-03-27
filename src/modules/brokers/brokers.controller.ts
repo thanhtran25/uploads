@@ -1,5 +1,6 @@
 import {
   Controller,
+  Get,
   Post,
   UseInterceptors,
   UploadedFiles,
@@ -14,10 +15,28 @@ export class BrokersController {
   constructor(private readonly brokersService: BrokersService) {}
 
   /**
-   * So sánh dữ liệu SSI (từ list file CSV upload) với dữ liệu KIS.
-   * POST /brokers/compare  (multipart/form-data, field name: "files")
+   * Compare using latest downloaded SSI data (from cron job).
+   * GET /brokers/compare
    */
-  @Post('compare')
+  @Get('compare')
+  compareLatest() {
+    return this.brokersService.compareLatest();
+  }
+
+  /**
+   * Download SSI CSV files, then compare.
+   * GET /brokers/compare/download
+   */
+  @Get('compare/download')
+  compareWithDownload() {
+    return this.brokersService.compareWithDownload();
+  }
+
+  /**
+   * Compare using uploaded CSV files.
+   * POST /brokers/compare/upload
+   */
+  @Post('compare/upload')
   @UseInterceptors(FilesInterceptor('files', 20))
   compare(@UploadedFiles() files: UploadedFile[]) {
     if (!files?.length) {

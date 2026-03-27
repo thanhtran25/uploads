@@ -43,13 +43,19 @@ export class KISService {
       ),
     );
 
+    const iKisIndexSymbols = await Promise.all(
+      GROUP_INDEXES.map((group) =>
+        fetchFromAPI(
+          `https://api.ikis.kisvn.vn/api/v3/market/indices/${group}/stocks`,
+        ),
+      ),
+    );
+
     const iKis = iKisResponses.flatMap(({ securities }) => securities ?? []);
 
 
     const kisData = this.handleKISData(kis);
-    const iKisData = this.handleIKISData(
-      iKis,
-    );
+    const iKisData = this.handleIKISData(iKis);
 
     // console.log(iKisData);
 
@@ -63,10 +69,15 @@ export class KISService {
     });
 
     const iKisIndexMaps: Record<string, Record<string, any>> = {};
-    GROUP_INDEXES.forEach((group) => {
-      iKisIndexMaps[group] = this.handleIndexIKisData(iKisStatic, group);
+    GROUP_INDEXES.forEach((group, idx) => {
+      iKisIndexMaps[group] = iKisIndexSymbols[idx].symbols.reduce(
+        (acc, symbol) => {
+          acc[symbol] = { symbol };
+          return acc;
+        },
+        {},
+      );
     });
-
     return {
       wts: {
         ...kisData,
@@ -121,40 +132,6 @@ export class KISService {
       result[key] = mapData(arr as any[], 'symbol');
     }
     return result;
-  }
-
-  /**
-   * Build map cho 1 group index bất kỳ (VN30, VN100, HNX30, ...).
-   */
-  handleIndexKisData(kis: any, symbols: string[]) {
-    const kisMap = mapData(kis, 's');
-    const resultMap = {};
-
-    for (let index = 0; index < symbols.length; index++) {
-      const key = symbols[index];
-      resultMap[key] = kisMap[key];
-    }
-
-    return resultMap;
-  }
-
-  handleIndexIKisData(ikis: any, indexName: string) {
-    const kisMap = mapData(ikis, 'symbol');
-    const resultMap = {};
-    const symbols = ikis
-      .filter(
-        ({ refIndexCode, refSymbolCode, securityType }) =>
-          (refIndexCode === indexName || refSymbolCode === indexName) &&
-          securityType === 'STOCK',
-      )
-      .map(({ symbol }) => symbol);
-
-    for (let index = 0; index < symbols.length; index++) {
-      const key = symbols[index];
-      resultMap[key] = kisMap[key];
-    }
-
-    return resultMap;
   }
 
   private chunkArray<T>(arr: T[], size: number): T[][] {

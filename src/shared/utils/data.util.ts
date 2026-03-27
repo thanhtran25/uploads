@@ -1,4 +1,3 @@
-import fs from 'fs';
 import axios from 'axios';
 
 export async function fetchFromAPI(url: string) {
@@ -58,15 +57,6 @@ function parseCsvContent(content: string): Record<string, any>[] {
   return jsonData;
 }
 
-export function csvToJson(filePath: string): Record<string, any>[] {
-  const content = fs.readFileSync(filePath, 'utf-8');
-  return parseCsvContent(content);
-}
-
-/**
- * Parse CSV from buffer or string (e.g. uploaded file).
- * Use for API receiving file list.
- */
 export function csvToJsonFromContent(
   content: Buffer | string,
 ): Record<string, any>[] {
