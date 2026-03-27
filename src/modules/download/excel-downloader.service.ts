@@ -86,7 +86,7 @@ export class ExcelDownloaderService {
     });
     const context = await browser.newContext({
       acceptDownloads: true,
-      viewport: { width: 1920, height: 1080 },
+      viewport: { width: 1280, height: 900 },
       userAgent:
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     });
@@ -173,13 +173,13 @@ export class ExcelDownloaderService {
         '#languageSwitcher .dropdown-button',
       );
       await dropdownButton.first().waitFor({ state: 'visible', timeout: T.appear });
-      await dropdownButton.first().click({ timeout: T.action, force: true });
+      await dropdownButton.first().click({ timeout: T.action });
 
       const englishItem = page.locator(
         '#languageSwitcher .dropdown-menu li span:text("English")',
       );
       await englishItem.first().waitFor({ state: 'visible', timeout: T.action });
-      await englishItem.first().click({ timeout: T.action, force: true });
+      await englishItem.first().click({ timeout: T.action });
       await page.locator('#languageSwitcher .dropdown-menu').waitFor({ state: 'hidden', timeout: T.action }).catch(() => {});
       this.logger.log('Đã chuyển ngôn ngữ sang English.');
     } catch (error) {
@@ -224,13 +224,11 @@ export class ExcelDownloaderService {
     this.logger.log(`Chuyển tab priceboard order ${order}...`);
 
     const item = page.locator(
-      `li.price-board-menu-overflow-item[style*="order: ${order}"], ` +
-      `li.price-board-menu-overflow-item[style*="order:${order}"]`,
+      `li.price-board-menu-overflow-item[style*="order: ${order}"]`,
     );
 
     await item.first().waitFor({ state: 'visible', timeout: T.appear });
-    await item.first().scrollIntoViewIfNeeded();
-    await item.first().click({ timeout: T.action, force: true });
+    await item.first().click({ timeout: T.action });
     await page.locator(
       `li.price-board-menu-submenu-selected[style*="order: ${order}"], li.price-board-menu-item-selected[style*="order: ${order}"]`,
     ).first().waitFor({ state: 'attached', timeout: T.action }).catch(() => {});
@@ -245,31 +243,24 @@ export class ExcelDownloaderService {
 
     const tabTitle = page.locator(`div[data-menu-id="${menuId}"]`);
     await tabTitle.first().waitFor({ state: 'attached', timeout: T.appear });
-    await tabTitle.first().scrollIntoViewIfNeeded();
+
+    await page.evaluate((id) => {
+      const div = document.querySelector(`div[data-menu-id="${id}"]`);
+      const li = div?.closest('li.price-board-menu-submenu');
+      for (const el of [li, div]) {
+        if (!el) continue;
+        el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+        el.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false }));
+      }
+    }, menuId);
 
     const popup = page.locator(`#${menuId}-popup`);
-
-    // Try native hover first (works better in headless), fallback to dispatchEvent
-    await tabTitle.first().hover({ force: true, timeout: T.action });
-    const visibleAfterHover = await popup.isVisible();
-    if (!visibleAfterHover) {
-      await page.evaluate((id) => {
-        const div = document.querySelector(`div[data-menu-id="${id}"]`);
-        const li = div?.closest('li.price-board-menu-submenu');
-        for (const el of [li, div]) {
-          if (!el) continue;
-          el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
-          el.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false }));
-        }
-      }, menuId);
-    }
-
     await popup.waitFor({ state: 'visible', timeout: T.appear });
 
     const subItem = popup.locator(`li:has-text("${subItemText}")`);
     await subItem.first().waitFor({ state: 'visible', timeout: T.action });
 
-    await subItem.first().click({ timeout: T.action, force: true });
+    await subItem.first().click({ timeout: T.action });
     await popup.waitFor({ state: 'hidden', timeout: T.action }).catch(() => {});
   }
 
@@ -301,7 +292,7 @@ export class ExcelDownloaderService {
 
     this.logger.log('Clicking download button...');
     await downloadLocator.scrollIntoViewIfNeeded();
-    await downloadLocator.click({ timeout: T.action, force: true });
+    await downloadLocator.click({ timeout: T.action });
 
     const download: Download = await downloadPromise;
     const suggestedName = download.suggestedFilename();
