@@ -245,18 +245,25 @@ export class ExcelDownloaderService {
 
     const tabTitle = page.locator(`div[data-menu-id="${menuId}"]`);
     await tabTitle.first().waitFor({ state: 'attached', timeout: T.appear });
-
-    await page.evaluate((id) => {
-      const div = document.querySelector(`div[data-menu-id="${id}"]`);
-      const li = div?.closest('li.price-board-menu-submenu');
-      for (const el of [li, div]) {
-        if (!el) continue;
-        el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
-        el.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false }));
-      }
-    }, menuId);
+    await tabTitle.first().scrollIntoViewIfNeeded();
 
     const popup = page.locator(`#${menuId}-popup`);
+
+    // Try native hover first (works better in headless), fallback to dispatchEvent
+    await tabTitle.first().hover({ force: true, timeout: T.action });
+    const visibleAfterHover = await popup.isVisible();
+    if (!visibleAfterHover) {
+      await page.evaluate((id) => {
+        const div = document.querySelector(`div[data-menu-id="${id}"]`);
+        const li = div?.closest('li.price-board-menu-submenu');
+        for (const el of [li, div]) {
+          if (!el) continue;
+          el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+          el.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false }));
+        }
+      }, menuId);
+    }
+
     await popup.waitFor({ state: 'visible', timeout: T.appear });
 
     const subItem = popup.locator(`li:has-text("${subItemText}")`);
