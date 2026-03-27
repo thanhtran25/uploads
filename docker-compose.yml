@@ -1,0 +1,15 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "${SERVER_PORT:-3000}:${SERVER_PORT:-3000}"
+    volumes:
+      - ./src:/app/src
+      - downloads:/app/downloads
+    command: npm run start:dev
+
+volumes:
+  downloads:

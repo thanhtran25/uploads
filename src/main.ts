@@ -3,7 +3,7 @@ import { AppModule } from './app.module';
 import { Config } from './shared/config/env.config';
 import { ValidationPipe } from '@nestjs/common';
 
-process.loadEnvFile?.();
+try { process.loadEnvFile?.(); } catch (_) {}
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);

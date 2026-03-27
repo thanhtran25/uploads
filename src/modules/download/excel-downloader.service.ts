@@ -65,8 +65,23 @@ export class ExcelDownloaderService {
     this.ensureDirExists(dir);
     this._currentDownloadDir = dir;
 
-    const browser = await chromium.launch({ headless: false });
-    const context = await browser.newContext({ acceptDownloads: true });
+    const headless = process.env.PLAYWRIGHT_HEADLESS !== 'false';
+    const browser = await chromium.launch({
+      headless,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--disable-software-rasterizer',
+      ],
+    });
+    const context = await browser.newContext({
+      acceptDownloads: true,
+      viewport: { width: 1280, height: 900 },
+      userAgent:
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    });
     const page = await context.newPage();
 
     try {
@@ -217,9 +232,6 @@ export class ExcelDownloaderService {
     const tabTitle = page.locator(`div[data-menu-id="${menuId}"]`);
     await tabTitle.first().waitFor({ state: 'attached', timeout: 5000 });
 
-    // The tab may be visually obscured by other menu items (e.g. Watchlist).
-    // Dispatch mouseover/mouseenter on both the <li> parent and <div> child
-    // to trigger rc-menu's hover handler via React's event delegation.
     await page.evaluate((id) => {
       const div = document.querySelector(`div[data-menu-id="${id}"]`);
       const li = div?.closest('li.price-board-menu-submenu');
