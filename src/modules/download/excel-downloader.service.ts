@@ -173,13 +173,13 @@ export class ExcelDownloaderService {
         '#languageSwitcher .dropdown-button',
       );
       await dropdownButton.first().waitFor({ state: 'visible', timeout: T.appear });
-      await dropdownButton.first().click({ timeout: T.action });
+      await dropdownButton.first().click({ timeout: T.action, noWaitAfter: true });
 
       const englishItem = page.locator(
         '#languageSwitcher .dropdown-menu li span:text("English")',
       );
       await englishItem.first().waitFor({ state: 'visible', timeout: T.action });
-      await englishItem.first().click({ timeout: T.action });
+      await englishItem.first().click({ timeout: T.action, noWaitAfter: true });
       await page.locator('#languageSwitcher .dropdown-menu').waitFor({ state: 'hidden', timeout: T.action }).catch(() => {});
       this.logger.log('Đã chuyển ngôn ngữ sang English.');
     } catch (error) {
@@ -196,7 +196,7 @@ export class ExcelDownloaderService {
       await modal.first().waitFor({ state: 'visible', timeout: T.action });
 
       const confirmButton = modal.getByRole('button', { name: /xác nhận/i });
-      await confirmButton.first().click({ timeout: T.action });
+      await confirmButton.first().click({ timeout: T.action, noWaitAfter: true });
       this.logger.log('Đã bấm nút Xác nhận trên popup.');
       await modal.first().waitFor({ state: 'hidden', timeout: T.action });
     } catch (error) {
@@ -228,7 +228,7 @@ export class ExcelDownloaderService {
     );
 
     await item.first().waitFor({ state: 'visible', timeout: T.appear });
-    await item.first().click({ timeout: T.action });
+    await item.first().click({ timeout: T.action, noWaitAfter: true });
     await page.locator(
       `li.price-board-menu-submenu-selected[style*="order: ${order}"], li.price-board-menu-item-selected[style*="order: ${order}"]`,
     ).first().waitFor({ state: 'attached', timeout: T.action }).catch(() => {});
@@ -260,7 +260,7 @@ export class ExcelDownloaderService {
     const subItem = popup.locator(`li:has-text("${subItemText}")`);
     await subItem.first().waitFor({ state: 'visible', timeout: T.action });
 
-    await subItem.first().click({ timeout: T.action });
+    await subItem.first().click({ timeout: T.action, noWaitAfter: true });
     await popup.waitFor({ state: 'hidden', timeout: T.action }).catch(() => {});
   }
 
@@ -274,7 +274,7 @@ export class ExcelDownloaderService {
       })...`,
     );
 
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(3_000);
 
     const downloadLocator = await this.findExportButton(
       page,
@@ -292,7 +292,7 @@ export class ExcelDownloaderService {
 
     this.logger.log('Clicking download button...');
     await downloadLocator.scrollIntoViewIfNeeded();
-    await downloadLocator.click({ timeout: T.action });
+    await downloadLocator.click({ timeout: T.action, noWaitAfter: true });
 
     const download: Download = await downloadPromise;
     const suggestedName = download.suggestedFilename();
