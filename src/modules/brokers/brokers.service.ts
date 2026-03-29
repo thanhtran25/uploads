@@ -31,30 +31,30 @@ export class BrokersService {
 
   async compareLatest() {
     const dir = this.downloadService.getLatestDir();
-    if (!dir) {
-      return { date: null, results: null, message: 'No SSI data available. Waiting for scheduled download at 08:01.' };
-    }
+    const date = dir ? dir.split('/').pop() : null;
+    const files = dir ? this.downloadService.loadFilesFromDir(dir) : [];
+    const ssiPending = !files.length;
 
-    const date = dir.split('/').pop();
-    const files = this.downloadService.loadFilesFromDir(dir);
-    if (!files.length) {
-      return { date, results: null, message: 'Download folder is empty.' };
-    }
-
-    const results = await this.compare(files);
-    return { date, results };
+    const results = await this.compare(files, ssiPending);
+    return ssiPending ? { date, results, ssiPending } : { date, results };
   }
 
-  async compare(files: CsvFileLike[]) {
+  async compare(files: CsvFileLike[], skipSSI = false) {
     const { wts: kisData, iKis } = await this.kisService.fetchData();
-    const ssiRaw = this.ssiService.handleSSIData(files);
-    const ssiData = this.normalizeFileData(ssiRaw, SSI_FILE_SOURCE_MAP);
     const masData = await this.masService.fetchData();
-    return {
-      SSI: {
+
+    let ssiResult: Record<string, any> | null = null;
+    if (!skipSSI) {
+      const ssiRaw = this.ssiService.handleSSIData(files);
+      const ssiData = this.normalizeFileData(ssiRaw, SSI_FILE_SOURCE_MAP);
+      ssiResult = {
         WTS: this.compareData(ssiData, kisData, KEY_MAP.SSI, 1, 's'),
         iKIS: this.compareData(ssiData, iKis, KEY_MAP.iKIS_SSI, 1, 'symbol'),
-      },
+      };
+    }
+
+    return {
+      SSI: ssiResult,
       MAS: {
         WTS: this.compareData(masData, kisData, KEY_MAP.MAS, 1, 's'),
         iKIS: this.compareData(masData, iKis, KEY_MAP.iKIS_MAS, 1, 'symbol'),

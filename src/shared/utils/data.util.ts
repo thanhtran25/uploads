@@ -1,8 +1,12 @@
 import axios from 'axios';
+import * as https from 'https';
+
+const httpsAgent = new https.Agent({ rejectUnauthorized: false });
 
 export async function fetchFromAPI(url: string) {
   try {
     const response = await axios.get(url, {
+      httpsAgent,
       headers: {
         'client-code':
           'LpPuP67Z%dJWwZ2j*HgGWfF!5$2fJorqa4d5d9D&legacy-messages',
@@ -18,6 +22,7 @@ export async function fetchFromAPI(url: string) {
 export async function fetchAPI(url: string, params) {
   try {
     const response = await axios.get(url, {
+      httpsAgent,
       ...params,
     });
     return response.data;
