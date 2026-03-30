@@ -15,7 +15,7 @@ const CHROMIUM_PATH =
   process.env.CHROMIUM_PATH ||
   (process.platform === 'darwin'
     ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-    : '/usr/bin/chromium');
+    : '/usr/bin/chromium-browser');
 
 type DownloadStep = {
   order: number | null;
@@ -99,11 +99,24 @@ export class ExcelDownloaderService {
         '--disable-dev-shm-usage',
         '--disable-gpu',
         '--disable-software-rasterizer',
+        '--single-process',
+        '--no-zygote',
+        '--disable-extensions',
+        '--disable-background-networking',
+        '--disable-default-apps',
+        '--disable-sync',
+        '--disable-translate',
+        '--disable-backgrounding-occluded-windows',
+        '--disable-renderer-backgrounding',
+        '--disable-component-update',
+        '--disable-domain-reliability',
+        '--no-first-run',
+        '--js-flags=--max-old-space-size=128',
       ],
     });
 
     const page = await browser.newPage();
-    await page.setViewport({ width: 1280, height: 900 });
+    await page.setViewport({ width: 1280, height: 800 });
     await page.setUserAgent(
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     );
