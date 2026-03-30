@@ -6,7 +6,10 @@ downloads
 .gitignore
 .vscode
 .idea
+.cursor
 *.log
 *.md
 coverage
 .DS_Store
+test
+*.spec.ts

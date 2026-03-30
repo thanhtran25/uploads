@@ -1,4 +1,5 @@
-FROM node:20-slim AS builder
+# ── Build stage ──────────────────────────────────────────────
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
@@ -10,21 +11,28 @@ COPY src ./src
 
 RUN npm run build
 
-FROM node:20-slim
+# ── Production stage ─────────────────────────────────────────
+FROM node:20-alpine
 
-RUN apt-get update \
- && apt-get install -y --no-install-recommends chromium \
- && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache \
+      chromium \
+      nss \
+      freetype \
+      harfbuzz \
+      font-noto-cjk \
+    && rm -rf /var/cache/apk/*
 
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev && npm cache clean --force
 
 COPY --from=builder /app/dist ./dist
 
 RUN mkdir -p /app/downloads
 
-ENV CHROMIUM_PATH=/usr/bin/chromium
+ENV CHROMIUM_PATH=/usr/bin/chromium-browser
+ENV NODE_OPTIONS="--max-old-space-size=256"
+
 EXPOSE 3000
 CMD ["node", "dist/main"]
