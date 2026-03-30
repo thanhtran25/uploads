@@ -1,12 +1,17 @@
 services:
   app:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
     restart: unless-stopped
     env_file:
       - .env
     ports:
       - "${PORT:-3000}:${PORT:-3000}"
     volumes:
+      - ./src:/app/src
+      - ./tsconfig.json:/app/tsconfig.json
+      - ./nest-cli.json:/app/nest-cli.json
       - downloads:/app/downloads
 
 volumes:

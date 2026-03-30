@@ -112,8 +112,8 @@ export class ExcelDownloaderService {
         { order: 5 },
         { order: 9, menuId: 'priceboardMenu-derivatives', subItems: ['Derivatives'] },
         { order: 9, menuId: 'priceboardMenu-rc-menu-more', subItems: ['Covered Warrants'] },
-        { order: 1, menuId: 'priceboardMenu-vn30', subItems: ['VN30', 'VN100'] },
         { order: 4, menuId: 'priceboardMenu-hnx', subItems: ['HNX', 'HNX Bond'] },
+        { order: 1, menuId: 'priceboardMenu-vn30', subItems: ['VN30', 'VN100'] },
       ];
 
       for (const step of steps) {
