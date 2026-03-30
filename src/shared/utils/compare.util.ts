@@ -79,8 +79,8 @@ export function compareObjectsWithWeight(
   }
 
   if (Object.keys(groupedFailures).length === 0) {
-    return { status: '\u2705' as const }; // ✅
+    return { status: true as const }; // ✅
   }
 
-  return { status: '\u274C' as const, failures: groupedFailures }; // ❎
+  return { status: false as const, failures: groupedFailures }; // ❎
 }
