@@ -173,6 +173,8 @@
         .modal-scroll { overflow-y: auto; flex: 1; }
 
         .modal-body { padding: 18px 22px; display: flex; flex-direction: column; gap: 12px; }
+        .missing-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .missing-row > .error-panel { min-width: 0; }
 
         /* ── Error Panel ── */
         .error-panel {
@@ -262,6 +264,15 @@
         .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
         .empty-state .icon { font-size: 40px; margin-bottom: 12px; }
         .empty-state p { font-size: 14px; }
+
+        .badge-pending { background: var(--warn-bg); color: #b45309; border: 1px solid var(--warn-border); }
+
+        .ssi-notice {
+            background: var(--warn-bg); border: 1px solid var(--warn-border);
+            border-radius: var(--radius); padding: 12px 18px;
+            font-size: 13px; font-weight: 500; color: #92400e;
+            margin-bottom: 16px; display: flex; align-items: center; gap: 8px;
+        }
     </style>
 </head>
 <body>
@@ -324,7 +335,7 @@
 </div>
 
 <script>
-    const API_BASE = 'https://atomic-madge-zoetran-32f5eee8.koyeb.app';
+    const API_BASE = 'http://localhost:3000';
 
     function setDate() {
         const d = new Date();
@@ -349,7 +360,7 @@
             }
 
             document.getElementById('dateLabel').textContent = json.date || '--';
-            renderResults(json.results);
+            renderResults(json.results, json.ssiPending);
         } catch (err) {
             document.getElementById('resultsContainer').innerHTML =
                 `<div class="table-card"><div class="empty-state"><div class="icon">&#9888;</div><p>Failed to load: ${err.message}</p></div></div>`;
@@ -359,7 +370,7 @@
         }
     }
 
-    function renderResults(data) {
+    function renderResults(data, ssiPending = false) {
         const sources = Object.keys(data);
         const platforms = ['WTS', 'iKIS'];
         const allMarkets = new Set();
@@ -373,6 +384,11 @@
         let total = 0, pass = 0, fail = 0;
 
         let html = '';
+
+        if (ssiPending) {
+            html += '<div class="ssi-notice">\u23F3 SSI data ch\u01B0a download xong. Ch\u1EC9 hi\u1EC3n th\u1ECB k\u1EBFt qu\u1EA3 MAS.</div>';
+        }
+
         for (const plat of platforms) {
             const tagClass = plat === 'WTS' ? 'wts' : 'ikis';
             html += '<div class="platform-section"><div class="table-card">';
@@ -384,6 +400,10 @@
             for (const market of markets) {
                 html += `<tr><td class="market-name">${market}</td>`;
                 for (const src of sources) {
+                    if (data[src] === null) {
+                        html += '<td><span class="badge badge-pending">\u23F3 Pending</span></td>';
+                        continue;
+                    }
                     const cell = data[src]?.[plat]?.[market];
                     total++;
                     if (!cell || cell.status === '\u2705') {
@@ -420,11 +440,15 @@
 
         let body = '';
 
-        if (missingSource.length) {
-            body += buildSymbolPanel('panel-source', 'Missing in Source', missingSource);
-        }
-        if (missingKis.length) {
-            body += buildSymbolPanel('panel-kis', 'Missing in KIS', missingKis);
+        if (missingSource.length || missingKis.length) {
+            body += '<div class="missing-row">';
+            body += missingSource.length
+                ? buildSymbolPanel('panel-source', 'Missing in Source', missingSource)
+                : '<div></div>';
+            body += missingKis.length
+                ? buildSymbolPanel('panel-kis', 'Missing in KIS', missingKis)
+                : '<div></div>';
+            body += '</div>';
         }
         if (mismatch.length) {
             body += '<div class="error-panel panel-mismatch">';

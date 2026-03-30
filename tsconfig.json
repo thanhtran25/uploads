@@ -20,8 +20,9 @@
     "esModuleInterop": true,
     "paths": {
       "@modules/*": ["src/modules/*"],
+      "@controllers/*": ["src/controllers/*"],
+      "@services/*": ["src/services/*"],
       "@shared/*": ["src/shared/*"]
-
     }
   }
 }
