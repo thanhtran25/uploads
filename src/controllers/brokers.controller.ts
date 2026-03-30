@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Logger,
   Post,
   UseInterceptors,
   UploadedFiles,
@@ -12,46 +13,36 @@ type UploadedFile = { buffer: Buffer; originalname: string };
 
 @Controller('brokers')
 export class BrokersController {
+  private readonly logger = new Logger(BrokersController.name);
+
   constructor(private readonly brokersService: BrokersService) {}
 
-  /**
-   * Compare using latest downloaded SSI data (from cron job).
-   * GET /brokers/compare
-   */
   @Get('compare')
   compareLatest() {
+    this.logger.log('GET /brokers/compare');
     return this.brokersService.compareLatest();
   }
 
-  /**
-   * Download SSI CSV files, then compare.
-   * GET /brokers/compare/download
-   */
   @Get('compare/download')
   compareWithDownload() {
+    this.logger.log('GET /brokers/compare/download');
     return this.brokersService.compareWithDownload();
   }
 
-  /**
-   * Compare using uploaded CSV files.
-   * POST /brokers/compare/upload
-   */
   @Post('compare/upload')
   @UseInterceptors(FilesInterceptor('files', 20))
   compare(@UploadedFiles() files: UploadedFile[]) {
+    this.logger.log(`POST /brokers/compare/upload (${files?.length ?? 0} files)`);
     if (!files?.length) {
       return { message: 'No files uploaded', data: {} };
     }
     return this.brokersService.compare(files);
   }
 
-  /**
-   * Nhận list file CSV (multipart/form-data, field name: "files").
-   * Trả về object: key = tên file (không extension), value = data đã mapData.
-   */
   @Post('ssi/csv')
   @UseInterceptors(FilesInterceptor('files', 20))
   uploadSsiCsv(@UploadedFiles() files: UploadedFile[]) {
+    this.logger.log(`POST /brokers/ssi/csv (${files?.length ?? 0} files)`);
     if (!files?.length) {
       return { message: 'No files uploaded', data: {} };
     }

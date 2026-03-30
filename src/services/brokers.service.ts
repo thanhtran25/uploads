@@ -90,9 +90,21 @@ export class BrokersService {
     const result: Record<string, any> = {};
     for (const { sourceKey, resultKey, kisKey } of markets) {
       const kisDataKey = kisKey ?? sourceKey;
+      const source = sourceData[sourceKey];
+      const kis = kisData[kisDataKey];
+      const sourceEmpty = !source || Object.keys(source).length === 0;
+      const kisEmpty = !kis || Object.keys(kis).length === 0;
+      if (sourceEmpty && kisEmpty) {
+        result[resultKey] = { status: true };
+        continue;
+      }
+      if (sourceEmpty) {
+        result[resultKey] = { status: 'pending' };
+        continue;
+      }
       result[resultKey] = compareObjectsWithWeight(
         sourceKey,
-        sourceData[sourceKey] ?? {},
+        source,
         kisData[kisDataKey] ?? {},
         weight,
         keyMap,

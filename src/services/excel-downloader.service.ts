@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { chromium, Download, Locator, Page } from 'playwright';
+import puppeteer, { Page, ElementHandle, CDPSession } from 'puppeteer-core';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -10,6 +10,12 @@ const T = {
   action: 2_000,
   download: 10_000,
 } as const;
+
+const CHROMIUM_PATH =
+  process.env.CHROMIUM_PATH ||
+  (process.platform === 'darwin'
+    ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+    : '/usr/bin/chromium');
 
 type DownloadStep = {
   order: number | null;
@@ -24,6 +30,9 @@ export class ExcelDownloaderService {
     process.env.PRICEBOARD_DOWNLOAD_DIR?.trim() ||
     path.join(process.cwd(), 'downloads', 'ssi');
 
+  private _currentDownloadDir?: string;
+  private _cdp?: CDPSession;
+
   constructor() {
     this.ensureDirExists(this.baseDir);
   }
@@ -35,8 +44,13 @@ export class ExcelDownloaderService {
 
   getLatestDir(): string | null {
     if (!fs.existsSync(this.baseDir)) return null;
-    const dirs = fs.readdirSync(this.baseDir)
-      .filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d) && fs.statSync(path.join(this.baseDir, d)).isDirectory())
+    const dirs = fs
+      .readdirSync(this.baseDir)
+      .filter(
+        (d) =>
+          /^\d{4}-\d{2}-\d{2}$/.test(d) &&
+          fs.statSync(path.join(this.baseDir, d)).isDirectory(),
+      )
       .sort()
       .reverse();
     return dirs.length ? path.join(this.baseDir, dirs[0]) : null;
@@ -44,7 +58,8 @@ export class ExcelDownloaderService {
 
   loadFilesFromDir(dir: string): { buffer: Buffer; originalname: string }[] {
     if (!fs.existsSync(dir)) return [];
-    return fs.readdirSync(dir)
+    return fs
+      .readdirSync(dir)
       .filter((f) => f.endsWith('.csv'))
       .map((f) => ({
         buffer: fs.readFileSync(path.join(dir, f)),
@@ -55,7 +70,8 @@ export class ExcelDownloaderService {
   cleanupOldDirs(): void {
     if (!fs.existsSync(this.baseDir)) return;
     const today = new Date().toISOString().slice(0, 10);
-    const dirs = fs.readdirSync(this.baseDir)
+    const dirs = fs
+      .readdirSync(this.baseDir)
       .filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d) && d < today);
 
     for (const dir of dirs) {
@@ -73,9 +89,10 @@ export class ExcelDownloaderService {
     this.ensureDirExists(dir);
     this._currentDownloadDir = dir;
 
-    const headless = process.env.PLAYWRIGHT_HEADLESS !== 'false';
-    const browser = await chromium.launch({
+    const headless = process.env.HEADLESS !== 'false';
+    const browser = await puppeteer.launch({
       headless,
+      executablePath: CHROMIUM_PATH,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
@@ -84,24 +101,29 @@ export class ExcelDownloaderService {
         '--disable-software-rasterizer',
       ],
     });
-    const context = await browser.newContext({
-      acceptDownloads: true,
-      viewport: { width: 1280, height: 900 },
-      userAgent:
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+
+    const page = await browser.newPage();
+    await page.setViewport({ width: 1280, height: 900 });
+    await page.setUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    );
+
+    this._cdp = await page.createCDPSession();
+    await this._cdp.send('Browser.setDownloadBehavior', {
+      behavior: 'allowAndName',
+      downloadPath: path.resolve(dir),
+      eventsEnabled: true,
     });
-    const page = await context.newPage();
 
     try {
-      this.logger.log(`Downloading SSI data → ${dir}`);
-      const response = await page.goto('https://iboard.ssi.com.vn', {
+      this.logger.log(`Starting SSI download → ${dir}`);
+      await page.goto('https://iboard.ssi.com.vn', {
         waitUntil: 'domcontentloaded',
         timeout: T.navigation,
       });
-      this.logger.log(`Status: ${response?.status()}`);
-      await page.waitForLoadState('networkidle', { timeout: T.networkIdle }).catch(() => {
-        this.logger.warn('networkidle timeout, continuing anyway...');
-      });
+      await page
+        .waitForNetworkIdle({ idleTime: 500, timeout: T.networkIdle })
+        .catch(() => {});
 
       await this.acceptTermsIfPresent(page);
       await this.switchToEnglish(page);
@@ -110,10 +132,26 @@ export class ExcelDownloaderService {
         { order: 2 },
         { order: 3 },
         { order: 5 },
-        { order: 9, menuId: 'priceboardMenu-derivatives', subItems: ['Derivatives'] },
-        { order: 9, menuId: 'priceboardMenu-rc-menu-more', subItems: ['Covered Warrants'] },
-        { order: 4, menuId: 'priceboardMenu-hnx', subItems: ['HNX', 'HNX Bond'] },
-        { order: 1, menuId: 'priceboardMenu-vn30', subItems: ['VN30', 'VN100'] },
+        {
+          order: 9,
+          menuId: 'priceboardMenu-derivatives',
+          subItems: ['Derivatives'],
+        },
+        {
+          order: 9,
+          menuId: 'priceboardMenu-rc-menu-more',
+          subItems: ['Covered Warrants'],
+        },
+        {
+          order: 1,
+          menuId: 'priceboardMenu-vn30',
+          subItems: ['VN30', 'VN100'],
+        },
+        {
+          order: 4,
+          menuId: 'priceboardMenu-hnx',
+          subItems: ['HNX', 'HNX Bond'],
+        },
       ];
 
       for (const step of steps) {
@@ -127,11 +165,12 @@ export class ExcelDownloaderService {
       throw error;
     } finally {
       this._currentDownloadDir = undefined;
+      this._cdp = undefined;
       await browser.close();
     }
   }
 
-  private _currentDownloadDir?: string;
+  // ── Helpers ──────────────────────────────────────────────────
 
   private ensureDirExists(dir: string): void {
     if (fs.existsSync(dir)) return;
@@ -148,63 +187,136 @@ export class ExcelDownloaderService {
     page: Page,
     selector: string,
     timeoutMs = 5000,
-  ): Promise<Locator | null> {
+  ): Promise<ElementHandle | null> {
     const start = Date.now();
-
     while (Date.now() - start < timeoutMs) {
       const frames = [page.mainFrame(), ...page.frames()];
       for (const frame of frames) {
-        const locator = frame.locator(selector);
-        if ((await locator.count()) > 0) {
-          return locator.first();
-        }
+        const el = await frame.$(selector);
+        if (el) return el;
       }
-
-      await page.waitForTimeout(200);
+      await new Promise((r) => setTimeout(r, 200));
     }
-
     return null;
   }
 
-  private async switchToEnglish(page: Page): Promise<void> {
-    this.logger.log('Chuyển ngôn ngữ sang English nếu có...');
-    try {
-      const dropdownButton = page.locator(
-        '#languageSwitcher .dropdown-button',
-      );
-      await dropdownButton.first().waitFor({ state: 'visible', timeout: T.appear });
-      await dropdownButton.first().click({ timeout: T.action, noWaitAfter: true });
+  /**
+   * Wait for a CDP download to complete, then rename GUID → suggestedFilename.
+   * `allowAndName` saves with GUID; we rename once `downloadProgress` reports 'completed'.
+   */
+  private waitForCdpDownload(dir: string, timeoutMs: number): Promise<string> {
+    const cdp = this._cdp!;
+    return new Promise<string>((resolve, reject) => {
+      let suggestedFilename = '';
 
-      const englishItem = page.locator(
-        '#languageSwitcher .dropdown-menu li span:text("English")',
+      const timer = setTimeout(() => {
+        cleanup();
+        reject(new Error('Download timeout'));
+      }, timeoutMs);
+
+      const onBegin = (e: any) => {
+        suggestedFilename = e.suggestedFilename;
+      };
+
+      const onProgress = (e: any) => {
+        if (e.state === 'completed') {
+          cleanup();
+          const guidPath = path.join(dir, e.guid);
+          const finalPath = path.join(dir, suggestedFilename);
+          if (fs.existsSync(guidPath)) {
+            fs.renameSync(guidPath, finalPath);
+          }
+          this.logger.log(`✅ ${suggestedFilename}`);
+          resolve(finalPath);
+        } else if (e.state === 'canceled') {
+          cleanup();
+          reject(new Error('Download canceled'));
+        }
+      };
+
+      const cleanup = () => {
+        clearTimeout(timer);
+        cdp.off('Browser.downloadWillBegin', onBegin);
+        cdp.off('Browser.downloadProgress', onProgress);
+      };
+
+      cdp.on('Browser.downloadWillBegin', onBegin);
+      cdp.on('Browser.downloadProgress', onProgress);
+    });
+  }
+
+  // ── Page interactions ────────────────────────────────────────
+
+  private async switchToEnglish(page: Page): Promise<void> {
+    try {
+      await page.waitForSelector('#languageSwitcher .dropdown-button', {
+        visible: true,
+        timeout: T.appear,
+      });
+      await page.click('#languageSwitcher .dropdown-button');
+
+      await page.waitForSelector(
+        '#languageSwitcher .dropdown-menu li span',
+        { visible: true, timeout: T.action },
       );
-      await englishItem.first().waitFor({ state: 'visible', timeout: T.action });
-      await englishItem.first().click({ timeout: T.action, noWaitAfter: true });
-      await page.locator('#languageSwitcher .dropdown-menu').waitFor({ state: 'hidden', timeout: T.action }).catch(() => {});
-      this.logger.log('Đã chuyển ngôn ngữ sang English.');
-    } catch (error) {
-      this.logger.log(
-        'Không tìm thấy nút chuyển English, giữ nguyên ngôn ngữ.',
-      );
+
+      const spans = await page.$$('#languageSwitcher .dropdown-menu li span');
+      for (const span of spans) {
+        const text = await span.evaluate((el) => el.textContent?.trim());
+        if (text === 'English') {
+          await span.click();
+          break;
+        }
+      }
+
+      await page
+        .waitForSelector('#languageSwitcher .dropdown-menu', {
+          hidden: true,
+          timeout: T.action,
+        })
+        .catch(() => {});
+    } catch {
+      // Language switcher not found, continue with current language
     }
   }
 
   private async acceptTermsIfPresent(page: Page): Promise<void> {
-    this.logger.log('Xác nhận điều khoản ngay khi vào trang (nếu có)...');
     try {
-      const modal = page.locator('.confirm-modal-tnc[role="dialog"]');
-      await modal.first().waitFor({ state: 'visible', timeout: T.action });
+      await page.waitForSelector('.confirm-modal-tnc[role="dialog"]', {
+        visible: true,
+        timeout: T.action,
+      });
 
-      const confirmButton = modal.getByRole('button', { name: /xác nhận/i });
-      await confirmButton.first().click({ timeout: T.action, noWaitAfter: true });
-      this.logger.log('Đã bấm nút Xác nhận trên popup.');
-      await modal.first().waitFor({ state: 'hidden', timeout: T.action });
-    } catch (error) {
-      this.logger.warn('Không thể bấm popup điều khoản, tiếp tục tải.', error);
+      const buttons = await page.$$(
+        '.confirm-modal-tnc[role="dialog"] button',
+      );
+      for (const btn of buttons) {
+        const text = await btn.evaluate((el) =>
+          el.textContent?.trim().toLowerCase(),
+        );
+        if (text?.includes('xác nhận')) {
+          await btn.click();
+          break;
+        }
+      }
+
+      await page
+        .waitForSelector('.confirm-modal-tnc[role="dialog"]', {
+          hidden: true,
+          timeout: T.action,
+        })
+        .catch(() => {});
+    } catch {
+      // No terms modal present, continue
     }
   }
 
-  private async downloadStep(page: Page, step: DownloadStep): Promise<string> {
+  // ── Download flow ────────────────────────────────────────────
+
+  private async downloadStep(
+    page: Page,
+    step: DownloadStep,
+  ): Promise<string> {
     if (step.menuId && step.subItems?.length) {
       let lastPath = '';
       for (const subItem of step.subItems) {
@@ -221,17 +333,19 @@ export class ExcelDownloaderService {
   }
 
   private async switchBoard(page: Page, order: number): Promise<void> {
-    this.logger.log(`Chuyển tab priceboard order ${order}...`);
+    const selector = `li.price-board-menu-overflow-item[style*="order: ${order}"]`;
+    await page.waitForSelector(selector, {
+      visible: true,
+      timeout: T.appear,
+    });
+    await page.click(selector);
 
-    const item = page.locator(
-      `li.price-board-menu-overflow-item[style*="order: ${order}"]`,
-    );
-
-    await item.first().waitFor({ state: 'visible', timeout: T.appear });
-    await item.first().click({ timeout: T.action, noWaitAfter: true });
-    await page.locator(
-      `li.price-board-menu-submenu-selected[style*="order: ${order}"], li.price-board-menu-item-selected[style*="order: ${order}"]`,
-    ).first().waitFor({ state: 'attached', timeout: T.action }).catch(() => {});
+    await page
+      .waitForSelector(
+        `li.price-board-menu-submenu-selected[style*="order: ${order}"], li.price-board-menu-item-selected[style*="order: ${order}"]`,
+        { timeout: T.action },
+      )
+      .catch(() => {});
   }
 
   private async switchBoardSubItem(
@@ -239,10 +353,9 @@ export class ExcelDownloaderService {
     menuId: string,
     subItemText: string,
   ): Promise<void> {
-    this.logger.log(`Chuyển submenu "${menuId}" → "${subItemText}"...`);
-
-    const tabTitle = page.locator(`div[data-menu-id="${menuId}"]`);
-    await tabTitle.first().waitFor({ state: 'attached', timeout: T.appear });
+    await page.waitForSelector(`div[data-menu-id="${menuId}"]`, {
+      timeout: T.appear,
+    });
 
     await page.evaluate((id) => {
       const div = document.querySelector(`div[data-menu-id="${id}"]`);
@@ -254,56 +367,50 @@ export class ExcelDownloaderService {
       }
     }, menuId);
 
-    const popup = page.locator(`#${menuId}-popup`);
-    await popup.waitFor({ state: 'visible', timeout: T.appear });
+    const popupSelector = `#${menuId}-popup`;
+    await page.waitForSelector(popupSelector, {
+      visible: true,
+      timeout: T.appear,
+    });
 
-    const subItem = popup.locator(`li:has-text("${subItemText}")`);
-    await subItem.first().waitFor({ state: 'visible', timeout: T.action });
+    const items = await page.$$(`${popupSelector} li`);
+    for (const item of items) {
+      const text = await item.evaluate((el) => el.textContent?.trim());
+      if (text?.includes(subItemText)) {
+        await item.click();
+        break;
+      }
+    }
 
-    await subItem.first().click({ timeout: T.action, noWaitAfter: true });
-    await popup.waitFor({ state: 'hidden', timeout: T.action }).catch(() => {});
+    await page
+      .waitForSelector(popupSelector, { hidden: true, timeout: T.action })
+      .catch(() => {});
   }
 
   private async triggerDownload(
     page: Page,
     order: number | null,
   ): Promise<string> {
-    this.logger.log(
-      `Waiting for download button #btnExportPriceboard (order ${
-        order ?? 'default'
-      })...`,
-    );
+    await new Promise((r) => setTimeout(r, 1_000));
 
-    await page.waitForTimeout(1_000);
-
-    const downloadLocator = await this.findExportButton(
+    const btn = await this.findExportButton(
       page,
       '#btnExportPriceboard',
       5_000,
     );
-
-    if (!downloadLocator) {
+    if (!btn) {
       throw new Error('Không tìm thấy nút tải Excel #btnExportPriceboard');
     }
 
-    const downloadPromise = page.waitForEvent('download', {
-      timeout: T.download,
-    });
+    const dir = this._currentDownloadDir || this.todayDir();
+    const downloadPromise = this.waitForCdpDownload(dir, T.download);
 
-    this.logger.log('Clicking download button...');
-    await downloadLocator.scrollIntoViewIfNeeded();
-    await downloadLocator.click({ timeout: T.action, noWaitAfter: true });
-
-    const download: Download = await downloadPromise;
-    const suggestedName = download.suggestedFilename();
-    const saveDir = this._currentDownloadDir || this.todayDir();
-    const savePath = path.join(saveDir, suggestedName);
-
-    await download.saveAs(savePath);
-    this.logger.log(
-      `✅ File downloaded${order ? ` (order ${order})` : ''}: ${savePath}`,
+    await btn.evaluate((el) =>
+      el.scrollIntoView({ block: 'center' }),
     );
+    await btn.click();
 
+    const savePath = await downloadPromise;
     return savePath;
   }
 }

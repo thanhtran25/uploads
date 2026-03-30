@@ -265,7 +265,16 @@
         .empty-state .icon { font-size: 40px; margin-bottom: 12px; }
         .empty-state p { font-size: 14px; }
 
-        .badge-pending { background: var(--warn-bg); color: #b45309; border: 1px solid var(--warn-border); }
+        .badge-pending {
+            background: var(--warn-bg); color: #b45309; border: 1px solid var(--warn-border);
+            position: relative; overflow: hidden;
+        }
+        .badge-pending::after {
+            content: ''; position: absolute; inset: 0;
+            background: linear-gradient(90deg, transparent 0%, rgba(245,158,11,.18) 40%, rgba(245,158,11,.28) 50%, rgba(245,158,11,.18) 60%, transparent 100%);
+            animation: shimmer 1.5s ease-in-out infinite;
+        }
+        @keyframes shimmer { 0%{transform:translateX(-100%)} 100%{transform:translateX(100%)} }
 
         .ssi-notice {
             background: var(--warn-bg); border: 1px solid var(--warn-border);
@@ -273,6 +282,16 @@
             font-size: 13px; font-weight: 500; color: #92400e;
             margin-bottom: 16px; display: flex; align-items: center; gap: 8px;
         }
+
+        /* ── Smooth transitions ── */
+        @keyframes fadeSlideIn { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: none } }
+        .fade-in { animation: fadeSlideIn .3s ease both; }
+        .platform-section:nth-child(2) { animation-delay: .05s; }
+        .platform-section:nth-child(3) { animation-delay: .1s; }
+        .summary-card { transition: transform .15s; }
+        .summary-card:hover { transform: translateY(-2px); }
+        .recon-table tbody tr { animation: fadeSlideIn .2s ease both; }
+        .recon-table tbody tr:nth-child(n) { animation-delay: calc(var(--row, 0) * 25ms); }
     </style>
 </head>
 <body>
@@ -336,6 +355,7 @@
 
 <script>
     const API_BASE = 'http://localhost:3000';
+    let _pollTimer = null;
 
     function setDate() {
         const d = new Date();
@@ -344,15 +364,23 @@
     }
     setDate();
 
-    async function runCompare() {
+    function stopPolling() {
+        if (_pollTimer) { clearTimeout(_pollTimer); _pollTimer = null; }
+    }
+
+    async function runCompare(isPolling = false) {
         const btn = document.getElementById('btnRun');
-        btn.disabled = true;
-        btn.innerHTML = '<span class="spinner"></span> Loading...';
+        if (!isPolling) {
+            stopPolling();
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> Loading...';
+        }
         try {
             const res = await fetch(`${API_BASE}/brokers/compare`);
             const json = await res.json();
 
             if (!json.results) {
+                stopPolling();
                 document.getElementById('resultsContainer').innerHTML =
                     `<div class="table-card"><div class="empty-state"><div class="icon">&#128337;</div><p>${json.message || 'No data available.'}</p></div></div>`;
                 document.getElementById('summary').style.display = 'none';
@@ -360,13 +388,24 @@
             }
 
             document.getElementById('dateLabel').textContent = json.date || '--';
-            renderResults(json.results, json.ssiPending);
+            const hasPending = renderResults(json.results, json.ssiPending);
+
+            if (hasPending) {
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner"></span> Polling...';
+                _pollTimer = setTimeout(() => runCompare(true), 2000);
+            } else {
+                stopPolling();
+            }
         } catch (err) {
+            stopPolling();
             document.getElementById('resultsContainer').innerHTML =
                 `<div class="table-card"><div class="empty-state"><div class="icon">&#9888;</div><p>Failed to load: ${err.message}</p></div></div>`;
         } finally {
-            btn.disabled = false;
-            btn.textContent = 'Reload';
+            if (!_pollTimer) {
+                btn.disabled = false;
+                btn.textContent = 'Reload';
+            }
         }
     }
 
@@ -381,32 +420,35 @@
                     Object.keys(data[src][plat]).forEach(m => allMarkets.add(m));
 
         const markets = [...allMarkets];
-        let total = 0, pass = 0, fail = 0;
+        let total = 0, pass = 0, fail = 0, pending = 0;
 
         let html = '';
 
         if (ssiPending) {
-            html += '<div class="ssi-notice">\u23F3 SSI data ch\u01B0a download xong. Ch\u1EC9 hi\u1EC3n th\u1ECB k\u1EBFt qu\u1EA3 MAS.</div>';
+            html += '<div class="ssi-notice fade-in">\u23F3 SSI data ch\u01B0a download. Ch\u1EC9 hi\u1EC3n th\u1ECB k\u1EBFt qu\u1EA3 MAS.</div>';
         }
 
         for (const plat of platforms) {
             const tagClass = plat === 'WTS' ? 'wts' : 'ikis';
-            html += '<div class="platform-section"><div class="table-card">';
+            html += '<div class="platform-section fade-in"><div class="table-card">';
             html += `<div class="table-card-header"><h2><span class="platform-tag ${tagClass}">${plat}</span></h2></div>`;
             html += '<table class="recon-table"><thead><tr><th class="market-name">Market</th>';
             for (const src of sources) html += `<th>${src}</th>`;
             html += '</tr></thead><tbody>';
 
-            for (const market of markets) {
-                html += `<tr><td class="market-name">${market}</td>`;
+            markets.forEach((market, rowIdx) => {
+                html += `<tr style="--row:${rowIdx}"><td class="market-name">${market}</td>`;
                 for (const src of sources) {
-                    if (data[src] === null) {
+                    const cell = data[src]?.[plat]?.[market];
+
+                    if (data[src] === null || !cell || cell.status === 'pending') {
+                        pending++;
                         html += '<td><span class="badge badge-pending">\u23F3 Pending</span></td>';
                         continue;
                     }
-                    const cell = data[src]?.[plat]?.[market];
+
                     total++;
-                    if (!cell || cell.status === '\u2705') {
+                    if (cell.status === true) {
                         pass++;
                         html += '<td><span class="badge badge-ok">\u2713 OK</span></td>';
                     } else {
@@ -419,7 +461,7 @@
                     }
                 }
                 html += '</tr>';
-            }
+            });
             html += '</tbody></table></div></div>';
         }
 
@@ -428,6 +470,8 @@
         document.getElementById('statPass').textContent = pass;
         document.getElementById('statFail').textContent = fail;
         document.getElementById('summary').style.display = 'grid';
+
+        return pending > 0;
     }
 
     function showError({ market, src, plat, failures }) {
